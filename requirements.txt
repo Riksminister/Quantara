@@ -1,0 +1,6 @@
+streamlit
+duckdb
+pandas
+numpy
+pyqtgraph
+PyQt5
