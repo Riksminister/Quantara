@@ -1,4 +1,3 @@
-import duckdb
 import pandas as pd
 from core.signal_engine import QuantaraSignalEngineV4
 
