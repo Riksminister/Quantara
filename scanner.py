@@ -1,23 +1,20 @@
-import duckdb
 import pandas as pd
 import os
 from core.signal_engine import QuantaraSignalEngineV4
 
 
 class VectorMarketScanner:
-    def __init__(self, db_path="data/market_data.db"):
+    def __init__(self):
         self.engine = QuantaraSignalEngineV4()
 
-        self.use_db = False
-        self.conn = None
+        # Detect if running locally with DB
+        self.use_db = os.path.exists("data/market_data.db")
 
-        # SAFE DB CONNECT (CLOUD SAFE)
-        try:
-            if os.path.exists(db_path):
-                self.conn = duckdb.connect(db_path, read_only=True)
-                self.use_db = True
-        except:
-            self.use_db = False
+        if self.use_db:
+            import duckdb
+            self.conn = duckdb.connect("data/market_data.db", read_only=True)
+        else:
+            self.conn = None
 
     def scan_market(self, limit=20):
         if self.use_db:
@@ -25,8 +22,9 @@ class VectorMarketScanner:
         else:
             return self.scan_sample()
 
+    # ---------- LOCAL MODE ----------
     def scan_db(self, limit):
-        query = f"""
+        query = """
         SELECT ticker
         FROM (
             SELECT ticker,
@@ -60,6 +58,7 @@ class VectorMarketScanner:
 
         return sorted(results, key=lambda x: x["confidence"], reverse=True)[:limit]
 
+    # ---------- CLOUD MODE ----------
     def scan_sample(self):
         try:
             df = pd.read_csv("data/sample_data.csv")
@@ -77,11 +76,6 @@ class VectorMarketScanner:
                 "risk": "Medium",
                 "entry": row["close"],
                 "stop_loss": round(row["close"] * 0.95, 2),
-                "take_profit": round(row["close"] * 1.05, 2),
-                "reason": "Demo mode (cloud)"
-            })
-
-        return results
                 "take_profit": round(row["close"] * 1.05, 2),
                 "reason": "Demo mode (cloud)"
             })
