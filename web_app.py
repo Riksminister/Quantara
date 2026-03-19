@@ -21,6 +21,17 @@ if "results" not in st.session_state:
 if "selected_index" not in st.session_state:
     st.session_state.selected_index = None
 
+if "pro" not in st.session_state:
+    st.session_state.pro = False
+
+
+# ---------- PAYWALL ----------
+if not st.session_state.pro:
+    st.warning("🔒 Free plan: limited access (3 trades)")
+
+    if st.button("🚀 Unlock Pro ($19/month)"):
+        st.session_state.pro = True
+
 
 # ---------- REAL DATA CHART ----------
 def create_chart(ticker):
@@ -50,7 +61,7 @@ def create_chart(ticker):
     df["macd"] = ema12 - ema26
     df["signal"] = df["macd"].ewm(span=9).mean()
 
-    # STRONG BUY signal
+    # BUY signal
     df["buy"] = (df["rsi"] < 35) & (df["macd"] > df["signal"])
 
     fig = go.Figure()
@@ -60,8 +71,7 @@ def create_chart(ticker):
         open=df["Open"],
         high=df["High"],
         low=df["Low"],
-        close=df["Close"],
-        name="Price"
+        close=df["Close"]
     ))
 
     fig.add_trace(go.Scatter(x=df.index, y=df["ma20"], name="MA20"))
@@ -86,11 +96,11 @@ def create_chart(ticker):
 def explain_trade(trade):
 
     reasons = [
-        "This stock is currently oversold and approaching a strong support level. Buying pressure is increasing, suggesting a potential rebound.",
-        "Momentum is shifting upward while price holds above key levels, indicating buyers are stepping in.",
-        "A breakout pattern is forming with strong volume support, suggesting continuation.",
-        "The trend remains bullish, and recent pullbacks are being bought aggressively.",
-        "AI detects accumulation after a correction, signaling a favorable entry."
+        "This stock is currently oversold and approaching a strong support level. Buying pressure is increasing, suggesting a rebound.",
+        "Momentum is shifting upward while price holds above key levels.",
+        "A breakout pattern is forming with strong volume.",
+        "Trend remains bullish with strong buying pressure.",
+        "AI detects accumulation after correction."
     ]
 
     reason = random.choice(reasons)
@@ -117,9 +127,9 @@ def explain_trade(trade):
 ---
 
 ### 📈 Plan
-- **Entry:** ${trade['entry']}
-- **Stop Loss:** ${trade['stop_loss']}
-- **Take Profit:** ${trade['take_profit']}
+- Entry: ${trade['entry']}
+- Stop Loss: ${trade['stop_loss']}
+- Take Profit: ${trade['take_profit']}
 """
 
 
@@ -136,7 +146,18 @@ if st.session_state.results:
 
     st.success("Scan complete ✅")
 
-    for i, r in enumerate(st.session_state.results):
+    # 🔥 SORT BEST FIRST
+    results = sorted(
+        st.session_state.results,
+        key=lambda x: x["expected_move"],
+        reverse=True
+    )
+
+    # 🔒 LIMIT FREE USERS
+    if not st.session_state.pro:
+        results = results[:3]
+
+    for i, r in enumerate(results):
 
         st.markdown(f"""
         ### #{i+1} {r['ticker']}
