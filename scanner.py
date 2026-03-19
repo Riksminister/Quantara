@@ -11,7 +11,7 @@ class VectorMarketScanner:
 
     def scan_sample(self, limit):
         try:
-            df = pd.read_csv("data/sample_data.csv")
+            df = pd.read_csv("sample_data.csv")
         except:
             return []
 
