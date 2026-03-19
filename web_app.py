@@ -13,11 +13,11 @@ st.caption("AI scanning the market in real-time")
 scanner = VectorMarketScanner()
 
 # ---------- STATE ----------
-if "selected_ticker" not in st.session_state:
-    st.session_state.selected_ticker = None
+if "results" not in st.session_state:
+    st.session_state.results = []
 
-if "selected_price" not in st.session_state:
-    st.session_state.selected_price = None
+if "selected" not in st.session_state:
+    st.session_state.selected = None
 
 
 # ---------- INDICATORS ----------
@@ -49,7 +49,7 @@ def create_chart(price):
 
     for _ in range(80):
         change = random.uniform(-2, 2)
-        prices.append(prices[-1] * (1 + change/100))
+        prices.append(prices[-1] * (1 + change / 100))
 
     df = pd.DataFrame({"close": prices})
 
@@ -73,18 +73,17 @@ def create_chart(price):
         open=df["open"],
         high=df["high"],
         low=df["low"],
-        close=df["close"],
-        name="Price"
+        close=df["close"]
     ))
 
     fig.add_trace(go.Scatter(x=df.index, y=df["ma20"], name="MA20"))
     fig.add_trace(go.Scatter(x=df.index, y=df["ma50"], name="MA50"))
 
-    buy_points = df[df["buy_signal"]]
+    buy = df[df["buy_signal"]]
 
     fig.add_trace(go.Scatter(
-        x=buy_points.index,
-        y=buy_points["close"],
+        x=buy.index,
+        y=buy["close"],
         mode="markers",
         marker=dict(size=10, color="green"),
         name="BUY"
@@ -97,16 +96,13 @@ def create_chart(price):
 
 # ---------- SCAN ----------
 if st.button("🔍 Scan Market"):
-
-    with st.spinner("AI scanning 7000+ stocks..."):
-        time.sleep(1.5)
+    with st.spinner("AI scanning..."):
+        time.sleep(1.2)
         st.session_state.results = scanner.scan_market(limit=20)
 
 
-# ---------- DISPLAY ----------
-if "results" in st.session_state:
-
-    st.success("Scan complete ✅")
+# ---------- SHOW RESULTS ----------
+if st.session_state.results:
 
     for i, r in enumerate(st.session_state.results):
 
@@ -117,10 +113,12 @@ if "results" in st.session_state:
         **Move:** {r['expected_move']}%  
         """)
 
-        if st.button(f"📊 Show Chart {r['ticker']}", key=f"chart_{i}"):
+        # 👇 FORM FIX
+        with st.form(key=f"form_{i}"):
+            submit = st.form_submit_button(f"📊 Show Chart {r['ticker']}")
 
-            st.session_state.selected_ticker = r["ticker"]
-            st.session_state.selected_price = r["entry"]
+            if submit:
+                st.session_state.selected = r
 
         with st.expander("🧠 Why this trade"):
             st.write(r["reason"])
@@ -128,11 +126,13 @@ if "results" in st.session_state:
         st.divider()
 
 
-# ---------- SHOW CHART ----------
-if st.session_state.selected_ticker:
+# ---------- DISPLAY CHART ----------
+if st.session_state.selected:
 
-    st.subheader(f"📊 {st.session_state.selected_ticker} Chart")
+    trade = st.session_state.selected
 
-    fig = create_chart(st.session_state.selected_price)
+    st.subheader(f"📊 {trade['ticker']} Chart")
+
+    fig = create_chart(trade["entry"])
 
     st.plotly_chart(fig, use_container_width=True)
