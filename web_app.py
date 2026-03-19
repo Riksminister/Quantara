@@ -29,7 +29,13 @@ if "pro" not in st.session_state:
 if not st.session_state.pro:
     st.warning("🔒 Free plan: limited access (3 trades)")
 
-    if st.button("🚀 Unlock Pro ($19/month)"):
+    st.markdown(
+        "[🚀 Unlock Pro ($19/month)](https://buy.stripe.com/14A14n6kuaaPffCdqoak000)",
+        unsafe_allow_html=True
+    )
+
+    # TEST BUTTON (kan fjernes senere)
+    if st.button("✅ I have paid"):
         st.session_state.pro = True
 
 
@@ -146,10 +152,18 @@ if st.session_state.results:
 
     st.success("Scan complete ✅")
 
-    # 🔥 SORT BEST FIRST
+    # 🔥 SORT BEST FIRST (signal + expected move)
+    def rank_trade(trade):
+        signal_score = {
+            "BUY": 3,
+            "WATCH": 2,
+            "AVOID": 1
+        }
+        return (signal_score.get(trade["signal"], 0), trade["expected_move"])
+
     results = sorted(
         st.session_state.results,
-        key=lambda x: x["expected_move"],
+        key=rank_trade,
         reverse=True
     )
 
