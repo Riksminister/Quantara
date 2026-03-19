@@ -25,7 +25,7 @@ if "selected_index" not in st.session_state:
 # ---------- REAL DATA CHART ----------
 def create_chart(ticker):
 
-    df = yf.download(ticker, period="3mo", interval="1d")
+    df = yf.download(ticker, period="1y", interval="1d")
 
     if df.empty:
         return None
