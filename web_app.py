@@ -5,10 +5,13 @@ import random
 import plotly.graph_objects as go
 from core.scanner import VectorMarketScanner
 
-st.set_page_config(layout="wide", page_title="Quantara AI")
+st.set_page_config(layout="wide", page_title="Analyrix")
 
-st.title("🚀 Quantara AI Terminal")
-st.caption("AI scanning the market in real-time")
+# ---------- HEADER ----------
+st.markdown("""
+# 🚀 Analyrix
+AI-powered trade analysis in seconds
+""")
 
 scanner = VectorMarketScanner()
 
@@ -61,7 +64,7 @@ def create_chart(price):
 
     df = calculate_indicators(df)
 
-    # STRICT BUY SIGNAL
+    # STRONG BUY SIGNAL
     df["buy_signal"] = (
         (df["rsi"] < 35) &
         (df["macd"] > df["signal"])
@@ -69,21 +72,17 @@ def create_chart(price):
 
     fig = go.Figure()
 
-    # Candlestick
     fig.add_trace(go.Candlestick(
         x=df.index,
         open=df["open"],
         high=df["high"],
         low=df["low"],
-        close=df["close"],
-        name="Price"
+        close=df["close"]
     ))
 
-    # Moving averages
     fig.add_trace(go.Scatter(x=df.index, y=df["ma20"], name="MA20"))
     fig.add_trace(go.Scatter(x=df.index, y=df["ma50"], name="MA50"))
 
-    # BUY signals
     buy = df[df["buy_signal"]]
 
     fig.add_trace(go.Scatter(
@@ -99,21 +98,50 @@ def create_chart(price):
     return fig
 
 
-# ---------- AI EXPLANATION ----------
+# ---------- AI ANALYSIS ----------
 def explain_trade(trade):
-    explanations = [
-        f"{trade['ticker']} shows strong bullish momentum with increasing volume.",
-        f"Trend structure is intact and price is holding above key moving averages.",
-        f"AI detects a breakout setup with continuation potential.",
-        f"Momentum indicators confirm buyers are in control.",
-        f"This setup offers a favorable risk/reward opportunity."
+
+    reasons = [
+        "This stock is currently oversold and approaching a strong support level. Buying pressure is increasing, suggesting a potential short-term rebound.",
+        "Momentum is shifting upward while price remains above key levels, indicating buyers are gaining control.",
+        "A breakout pattern is forming with increasing volume, which often leads to continuation.",
+        "The trend remains bullish, and recent pullbacks are being absorbed by buyers.",
+        "AI detects accumulation after a correction, indicating a favorable entry opportunity."
     ]
-    return random.choice(explanations)
+
+    reason = random.choice(reasons)
+
+    return f"""
+### 🧠 AI Analysis
+{reason}
+
+---
+
+### 🎯 Action
+**{trade['signal']}**
+
+---
+
+### 📊 Confidence
+**{trade['confidence']}%**
+
+---
+
+### ⚠️ Risk
+**{trade['risk']}**
+
+---
+
+### 📈 Plan
+- **Entry:** ${trade['entry']}
+- **Stop Loss:** ${trade['stop_loss']}
+- **Take Profit:** ${trade['take_profit']}
+"""
 
 
 # ---------- SCAN ----------
 if st.button("🔍 Scan Market"):
-    with st.spinner("AI scanning 7000+ stocks..."):
+    with st.spinner("Analyrix scanning 7000+ stocks..."):
         time.sleep(1.5)
         st.session_state.results = scanner.scan_market(limit=20)
         st.session_state.selected_index = None
@@ -134,20 +162,14 @@ if st.session_state.results:
         **Risk:** {r['risk']}
         """)
 
-        # 🔥 SELECT BUTTON
-        if st.button(f"📊 View Chart", key=f"btn_{i}"):
+        if st.button("📊 View Chart", key=f"btn_{i}"):
             st.session_state.selected_index = i
 
-        # 🔥 SHOW CHART UNDER SELECTED STOCK
         if st.session_state.selected_index == i:
+
             fig = create_chart(r["entry"])
             st.plotly_chart(fig, use_container_width=True)
 
-            with st.expander("🧠 Why this trade"):
-                st.write(explain_trade(r))
+            st.markdown(explain_trade(r))
 
         st.divider()
-
-    fig = create_chart(trade["entry"])
-
-    st.plotly_chart(fig, use_container_width=True)
