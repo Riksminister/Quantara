@@ -11,7 +11,7 @@ class VectorMarketScanner:
         self.use_db = False
         self.conn = None
 
-        # Try to connect to DB (LOCAL ONLY)
+        # SAFE DB CONNECT (CLOUD SAFE)
         try:
             if os.path.exists(db_path):
                 self.conn = duckdb.connect(db_path, read_only=True)
@@ -25,7 +25,6 @@ class VectorMarketScanner:
         else:
             return self.scan_sample()
 
-    # ---------- LOCAL MODE ----------
     def scan_db(self, limit):
         query = f"""
         SELECT ticker
@@ -61,7 +60,6 @@ class VectorMarketScanner:
 
         return sorted(results, key=lambda x: x["confidence"], reverse=True)[:limit]
 
-    # ---------- CLOUD MODE ----------
     def scan_sample(self):
         try:
             df = pd.read_csv("data/sample_data.csv")
@@ -79,6 +77,11 @@ class VectorMarketScanner:
                 "risk": "Medium",
                 "entry": row["close"],
                 "stop_loss": round(row["close"] * 0.95, 2),
+                "take_profit": round(row["close"] * 1.05, 2),
+                "reason": "Demo mode (cloud)"
+            })
+
+        return results
                 "take_profit": round(row["close"] * 1.05, 2),
                 "reason": "Demo mode (cloud)"
             })
