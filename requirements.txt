@@ -4,3 +4,4 @@ pandas
 numpy
 pyqtgraph
 PyQt5
+plotly
