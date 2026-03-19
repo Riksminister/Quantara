@@ -12,13 +12,19 @@ st.caption("AI scanning the market in real-time")
 
 scanner = VectorMarketScanner()
 
+# ---------- STATE ----------
+if "selected_ticker" not in st.session_state:
+    st.session_state.selected_ticker = None
+
+if "selected_price" not in st.session_state:
+    st.session_state.selected_price = None
+
 
 # ---------- INDICATORS ----------
 def calculate_indicators(df):
     df["ma20"] = df["close"].rolling(20).mean()
     df["ma50"] = df["close"].rolling(50).mean()
 
-    # RSI
     delta = df["close"].diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
@@ -29,7 +35,6 @@ def calculate_indicators(df):
     rs = avg_gain / avg_loss
     df["rsi"] = 100 - (100 / (1 + rs))
 
-    # MACD
     ema12 = df["close"].ewm(span=12).mean()
     ema26 = df["close"].ewm(span=26).mean()
     df["macd"] = ema12 - ema26
@@ -39,8 +44,7 @@ def calculate_indicators(df):
 
 
 # ---------- CHART ----------
-def create_chart(ticker, price):
-    # Fake OHLC data (realistic feel)
+def create_chart(price):
     prices = [price]
 
     for _ in range(80):
@@ -57,7 +61,6 @@ def create_chart(ticker, price):
 
     df = calculate_indicators(df)
 
-    # BUY SIGNAL (STRICT)
     df["buy_signal"] = (
         (df["rsi"] < 35) &
         (df["macd"] > df["signal"])
@@ -65,7 +68,6 @@ def create_chart(ticker, price):
 
     fig = go.Figure()
 
-    # Candlestick
     fig.add_trace(go.Candlestick(
         x=df.index,
         open=df["open"],
@@ -75,11 +77,9 @@ def create_chart(ticker, price):
         name="Price"
     ))
 
-    # MA
     fig.add_trace(go.Scatter(x=df.index, y=df["ma20"], name="MA20"))
     fig.add_trace(go.Scatter(x=df.index, y=df["ma50"], name="MA50"))
 
-    # BUY markers
     buy_points = df[df["buy_signal"]]
 
     fig.add_trace(go.Scatter(
@@ -95,45 +95,44 @@ def create_chart(ticker, price):
     return fig
 
 
-# ---------- AI EXPLANATION ----------
-def explain_trade(trade):
-    explanations = [
-        f"{trade['ticker']} is showing strong upward momentum with increasing volume.",
-        f"The trend is bullish and the price is holding above key levels.",
-        f"AI detects a breakout pattern with high probability continuation.",
-        f"Momentum and structure suggest buyers are in control.",
-        f"This setup shows a favorable risk/reward profile."
-    ]
-
-    return random.choice(explanations)
-
-
 # ---------- SCAN ----------
 if st.button("🔍 Scan Market"):
 
     with st.spinner("AI scanning 7000+ stocks..."):
         time.sleep(1.5)
-        results = scanner.scan_market(limit=20)
+        st.session_state.results = scanner.scan_market(limit=20)
+
+
+# ---------- DISPLAY ----------
+if "results" in st.session_state:
 
     st.success("Scan complete ✅")
 
-    for i, r in enumerate(results):
+    for i, r in enumerate(st.session_state.results):
 
         st.markdown(f"""
         ### #{i+1} {r['ticker']}
         **Signal:** {r['signal']}  
         **Confidence:** {r['confidence']}%  
-        **Expected Move:** {r['expected_move']}%  
+        **Move:** {r['expected_move']}%  
         """)
 
-        # --- CHART BUTTON ---
         if st.button(f"📊 Show Chart {r['ticker']}", key=f"chart_{i}"):
 
-            fig = create_chart(r["ticker"], r["entry"])
-            st.plotly_chart(fig, use_container_width=True)
+            st.session_state.selected_ticker = r["ticker"]
+            st.session_state.selected_price = r["entry"]
 
-        # --- AI EXPLANATION ---
         with st.expander("🧠 Why this trade"):
-            st.write(explain_trade(r))
+            st.write(r["reason"])
 
         st.divider()
+
+
+# ---------- SHOW CHART ----------
+if st.session_state.selected_ticker:
+
+    st.subheader(f"📊 {st.session_state.selected_ticker} Chart")
+
+    fig = create_chart(st.session_state.selected_price)
+
+    st.plotly_chart(fig, use_container_width=True)
