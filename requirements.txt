@@ -5,3 +5,4 @@ numpy
 pyqtgraph
 PyQt5
 plotly
+yfinance
