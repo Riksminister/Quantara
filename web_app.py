@@ -1,16 +1,17 @@
 import streamlit as st
+import time
 from core.scanner import VectorMarketScanner
 
-st.set_page_config(layout="wide")
+st.set_page_config(layout="wide", page_title="Quantara AI")
 
-# --- LOGIN SIMULATION ---
+# --- HEADER ---
+st.markdown("# 🚀 Quantara AI Terminal")
+st.caption("AI scanning the market in real-time")
+
+# --- PAYWALL ---
 if "paid" not in st.session_state:
     st.session_state.paid = False
 
-# --- HEADER ---
-st.title("🚀 Quantara AI Terminal")
-
-# --- PAYWALL ---
 if not st.session_state.paid:
     st.warning("🔒 Free version: limited access")
 
@@ -20,21 +21,33 @@ if not st.session_state.paid:
 # --- SCANNER ---
 scanner = VectorMarketScanner()
 
-if st.button("Scan Market"):
-    results = scanner.scan_market(limit=20)
+if st.button("🔍 Scan Market"):
+
+    with st.spinner("AI scanning 7000+ stocks..."):
+        time.sleep(1.5)  # fake realism
+
+        results = scanner.scan_market(limit=50)
+
+    st.success("Scan complete ✅")
 
     # LIMIT FREE USERS
     if not st.session_state.paid:
-        results = results[:3]
+        results = results[:5]
 
-    for r in results:
-        st.subheader(r["ticker"])
-        st.write(
-            f"{r['signal']} | Conf: {r['confidence']}% | "
-            f"Move: {r['expected_move']}% | Risk: {r['risk']}"
-        )
+    st.subheader("📊 Top AI Opportunities")
 
-        st.write(f"Entry: {r['entry']}")
+    for i, r in enumerate(results):
+
+        color = "green" if r["signal"] == "BUY" else "orange"
+
+        st.markdown(f"""
+        ### #{i+1} {r['ticker']}
+        **Signal:** :{color}[{r['signal']}]  
+        **Confidence:** {r['confidence']}%  
+        **Expected Move:** {r['expected_move']}%  
+        **Risk:** {r['risk']}  
+        **Entry:** ${r['entry']}
+        """)
 
         with st.expander("🧠 Why this trade"):
             st.write(r["reason"])
