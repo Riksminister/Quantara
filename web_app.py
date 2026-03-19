@@ -4,7 +4,7 @@ from core.scanner import VectorMarketScanner
 
 st.set_page_config(layout="wide", page_title="Quantara AI")
 
-scanner = VectorMarketScanner()
+scanner = VectorMarketScanner()  # reload fix
 
 # --- HEADER ---
 st.markdown("""
