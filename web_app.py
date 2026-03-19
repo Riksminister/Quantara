@@ -1,53 +1,42 @@
 import streamlit as st
-import pandas as pd
 from core.scanner import VectorMarketScanner
 
-st.set_page_config(layout="wide", page_title="Quantara AI")
+st.set_page_config(layout="wide")
 
-scanner = VectorMarketScanner()  # reload fix
+# --- LOGIN SIMULATION ---
+if "paid" not in st.session_state:
+    st.session_state.paid = False
 
 # --- HEADER ---
-st.markdown("""
-# 🚀 Quantara AI Terminal
-Find high-probability trades instantly
-""")
+st.title("🚀 Quantara AI Terminal")
 
-# --- SIDEBAR ---
-st.sidebar.title("💰 Account")
+# --- PAYWALL ---
+if not st.session_state.paid:
+    st.warning("🔒 Free version: limited access")
 
-if "balance" not in st.session_state:
-    st.session_state.balance = 1000
+    if st.button("Unlock Pro ($19/month)"):
+        st.session_state.paid = True
 
-profit = st.sidebar.number_input("Add Profit ($)", value=0.0)
+# --- SCANNER ---
+scanner = VectorMarketScanner()
 
-if st.sidebar.button("Update Balance"):
-    st.session_state.balance += profit
-
-st.sidebar.metric("Balance", f"${st.session_state.balance:.2f}")
-
-# --- SCAN BUTTON ---
-if st.button("🔍 Scan Market"):
+if st.button("Scan Market"):
     results = scanner.scan_market(limit=20)
 
-    st.subheader("📊 AI Trade Opportunities")
+    # LIMIT FREE USERS
+    if not st.session_state.paid:
+        results = results[:3]
 
     for r in results:
-        with st.container():
-            col1, col2, col3 = st.columns([2, 3, 2])
+        st.subheader(r["ticker"])
+        st.write(
+            f"{r['signal']} | Conf: {r['confidence']}% | "
+            f"Move: {r['expected_move']}% | Risk: {r['risk']}"
+        )
 
-            with col1:
-                st.markdown(f"### {r['ticker']}")
+        st.write(f"Entry: {r['entry']}")
 
-            with col2:
-                st.write(
-                    f"{r['signal']} | Conf: {r['confidence']}% | "
-                    f"Move: {r['expected_move']}% | Risk: {r['risk']}"
-                )
+        with st.expander("🧠 Why this trade"):
+            st.write(r["reason"])
 
-            with col3:
-                st.write(f"Entry: {r['entry']}")
-
-            with st.expander("🧠 Why this trade"):
-                st.write(r.get("reason", "No explanation available"))
-
-            st.divider()
+        st.divider()
