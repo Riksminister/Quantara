@@ -34,10 +34,6 @@ if not st.session_state.pro:
         unsafe_allow_html=True
     )
 
-    # TEST BUTTON (kan fjernes senere)
-    if st.button("✅ I have paid"):
-        st.session_state.pro = True
-
 
 # ---------- REAL DATA CHART ----------
 def create_chart(ticker):
@@ -152,7 +148,7 @@ if st.session_state.results:
 
     st.success("Scan complete ✅")
 
-    # 🔥 SORT BEST FIRST (signal + expected move)
+    # 🔥 SORT BY SIGNAL + EXPECTED MOVE
     def rank_trade(trade):
         signal_score = {
             "BUY": 3,
