@@ -59,7 +59,7 @@ with col1:
 
 with col2:
     st.markdown("""
-- 📊 Candlestick charts  
+- 📊 Smart charts  
 - 📉 RSI + MACD indicators  
 - ⚡ Fast market scanning  
 - 🔒 Premium insights (Pro)  
@@ -136,7 +136,7 @@ def add_indicators(df):
     return df
 
 # ---------- CHART ----------
-def create_chart(ticker):
+def create_chart(ticker, signal):
 
     df = get_data(ticker)
     df = add_indicators(df)
@@ -148,16 +148,28 @@ def create_chart(ticker):
         row_heights=[0.6, 0.2, 0.2]
     )
 
-    # 🔥 CANDLESTICKS (FIXED)
-    fig.add_trace(go.Candlestick(
+    # PRICE LINE (CLEAN)
+    fig.add_trace(go.Scatter(
         x=df["Date"],
-        open=df["Open"],
-        high=df["High"],
-        low=df["Low"],
-        close=df["Close"],
-        increasing_line_color="green",
-        decreasing_line_color="red",
-        name="Price"
+        y=df["Close"],
+        name="Price",
+        line=dict(width=2)
+    ), row=1, col=1)
+
+    # 🔥 BUY/SELL MARKER
+    last_x = df["Date"].iloc[-1]
+    last_y = df["Close"].iloc[-1]
+
+    color = "green" if signal == "BUY" else "red"
+
+    fig.add_trace(go.Scatter(
+        x=[last_x],
+        y=[last_y],
+        mode="markers+text",
+        text=[signal],
+        textposition="top center",
+        marker=dict(size=12, color=color),
+        name="Signal"
     ), row=1, col=1)
 
     # RSI
@@ -228,7 +240,7 @@ if st.session_state.results:
 
         if st.button(f"📊 View Chart - {r['ticker']}", key=i):
 
-            fig = create_chart(r["ticker"])
+            fig = create_chart(r["ticker"], r["signal"])
             st.plotly_chart(fig, use_container_width=True)
 
             st.markdown(f"""
