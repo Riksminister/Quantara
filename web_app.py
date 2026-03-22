@@ -16,10 +16,10 @@ if "users_db" not in st.session_state:
 if "results" not in st.session_state:
     st.session_state.results = []
 
-# ---------- LOGIN INPUT ----------
+# ---------- LOGIN ----------
 user_email = st.text_input("", placeholder="Enter your email to continue")
 
-# ---------- USER SETUP ----------
+# ---------- USER ----------
 if user_email and user_email not in st.session_state.users_db:
     st.session_state.users_db[user_email] = {
         "plan": "free",
@@ -27,7 +27,7 @@ if user_email and user_email not in st.session_state.users_db:
         "last_reset": datetime.now()
     }
 
-user = st.session_state.users_db.get(user_email, None)
+user = st.session_state.users_db.get(user_email)
 
 # ---------- RESET ----------
 if user:
@@ -35,7 +35,7 @@ if user:
         user["scans"] = 0
         user["last_reset"] = datetime.now()
 
-# ---------- HERO / LANDING (ALLTID SYNLIG) ----------
+# ---------- HERO ----------
 st.markdown("""
 # 🚀 Analyrix
 
@@ -127,7 +127,6 @@ def get_data(ticker):
 
 def add_indicators(df):
     delta = df["Close"].diff()
-
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
 
@@ -141,7 +140,6 @@ def add_indicators(df):
     df["Signal"] = df["MACD"].ewm(span=9).mean()
 
     df = df.fillna(method="bfill").fillna(method="ffill")
-
     return df
 
 # ---------- CHART ----------
@@ -197,7 +195,7 @@ def create_chart(ticker, signal):
 
     return fig
 
-# ---------- DISPLAY ----------
+# ---------- RESULTS ----------
 if st.session_state.results:
 
     for i, r in enumerate(st.session_state.results):
@@ -223,45 +221,21 @@ Take Profit: {r['take_profit']}
 
         st.divider()
 
-# ---------- OVERLAY ----------
+# ---------- LOGIN MODAL ----------
 if not user_email:
 
-    st.markdown("""
-    <style>
-    .overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0,0,0,0.92);
-        backdrop-filter: blur(6px);
-        z-index: 9999;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        color: white;
-        text-align: center;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+    st.markdown("## 🔒 Unlock Analyrix")
 
-    st.markdown("""
-    <div class="overlay">
-        <div>
-            <h1>🔒 Unlock Analyrix</h1>
-            <p>AI-powered trade signals in seconds</p>
+    st.info("""
+**Free**
+- 3 scans per day
 
-            <h3>Free</h3>
-            <p>3 scans per day</p>
+**Pro**
+- Unlimited scans  
+- Full access  
+- Better signals
+""")
 
-            <h3>Pro</h3>
-            <p>Unlimited scans<br>Full access<br>Better signals</p>
-
-            <br>
-            <p>Enter your email above to continue</p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.warning("Enter your email above to continue")
 
     st.stop()
