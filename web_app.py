@@ -24,19 +24,16 @@ if "scan_count" not in st.session_state:
 if "last_scan_reset" not in st.session_state:
     st.session_state.last_scan_reset = datetime.now()
 
-
 # ---------- RESET 24H ----------
 if datetime.now() - st.session_state.last_scan_reset > timedelta(hours=24):
     st.session_state.scan_count = 0
     st.session_state.last_scan_reset = datetime.now()
-
 
 # ---------- HEADER ----------
 st.markdown("# 🚀 Analyrix")
 st.caption("AI-powered trade analysis in seconds")
 
 scanner = VectorMarketScanner()
-
 
 # ---------- PAYWALL ----------
 if not st.session_state.pro:
@@ -47,7 +44,6 @@ if not st.session_state.pro:
         unsafe_allow_html=True
     )
 
-
 # ---------- SCAN ----------
 if st.button("🔍 Scan Market"):
 
@@ -56,13 +52,22 @@ if st.button("🔍 Scan Market"):
     else:
         with st.spinner("Scanning 7000+ stocks..."):
             time.sleep(1.5)
-
             st.session_state.results = scanner.scan_market(limit=20)
             st.session_state.selected_index = None
             st.session_state.scan_count += 1
 
+# ---------- TIMEFRAME ----------
+def get_timeframe(trade):
+    move = trade["expected_move"]
 
-# ---------- CHART (FIXED CANDLESTICKS) ----------
+    if move > 8:
+        return "Short-term (1–3 days)"
+    elif move > 4:
+        return "Medium-term (3–7 days)"
+    else:
+        return "Longer-term (1–2 weeks)"
+
+# ---------- CHART (FORCE CANDLESTICKS) ----------
 def create_chart(ticker):
 
     df = yf.download(ticker, period="1y", interval="1d")
@@ -70,34 +75,35 @@ def create_chart(ticker):
     if df.empty:
         return None
 
+    # 🔥 sørg for riktige kolonner
+    df = df.reset_index()
+
     fig = go.Figure()
 
-    # 🔥 CANDLESTICKS
     fig.add_trace(go.Candlestick(
-        x=df.index,
+        x=df["Date"],
         open=df["Open"],
         high=df["High"],
         low=df["Low"],
         close=df["Close"],
-        name="Candles"
+        increasing_line_color="green",
+        decreasing_line_color="red"
     ))
 
-    # Moving averages
-    df["ma20"] = df["Close"].rolling(20).mean()
-    df["ma50"] = df["Close"].rolling(50).mean()
+    # MA
+    df["MA20"] = df["Close"].rolling(20).mean()
+    df["MA50"] = df["Close"].rolling(50).mean()
 
     fig.add_trace(go.Scatter(
-        x=df.index,
-        y=df["ma20"],
-        name="MA20",
-        line=dict(width=2)
+        x=df["Date"],
+        y=df["MA20"],
+        name="MA20"
     ))
 
     fig.add_trace(go.Scatter(
-        x=df.index,
-        y=df["ma50"],
-        name="MA50",
-        line=dict(width=2)
+        x=df["Date"],
+        y=df["MA50"],
+        name="MA50"
     ))
 
     fig.update_layout(
@@ -108,11 +114,9 @@ def create_chart(ticker):
 
     return fig
 
-
 # ---------- DISPLAY ----------
 if st.session_state.results:
 
-    # SORT (best first)
     def rank_trade(trade):
         score = {"BUY": 3, "WATCH": 2, "AVOID": 1}
         return (score.get(trade["signal"], 0), trade["expected_move"])
@@ -123,7 +127,6 @@ if st.session_state.results:
         reverse=True
     )
 
-    # LIMIT FREE USERS
     if not st.session_state.pro:
         results = results[:3]
 
@@ -146,13 +149,17 @@ if st.session_state.results:
 
             if fig:
                 st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.warning("No data available")
+
+            timeframe = get_timeframe(r)
 
             st.markdown(f"""
-            **Entry:** ${r['entry']}  
-            **Stop Loss:** ${r['stop_loss']}  
-            **Take Profit:** ${r['take_profit']}
+            ### 🧠 Plan
+            Entry: ${r['entry']}  
+            Stop Loss: ${r['stop_loss']}  
+            Take Profit: ${r['take_profit']}  
+
+            ### ⏱️ Expected Hold
+            {timeframe}
             """)
 
         st.divider()
