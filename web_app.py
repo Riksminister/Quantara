@@ -89,7 +89,7 @@ def get_timeframe(trade):
     else:
         return "Longer-term (1–2 weeks)"
 
-# ---------- DATA ----------
+# ---------- DATA (FIXED) ----------
 def get_data(ticker):
     try:
         df = yf.download(ticker, period="6mo", interval="1d")
@@ -97,7 +97,12 @@ def get_data(ticker):
         if df is None or df.empty:
             raise Exception("No data")
 
+        # 🔥 FIX multi-index (VIKTIG)
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+
         df = df.reset_index()
+
     except:
         dates = pd.date_range(end=pd.Timestamp.today(), periods=120)
         price = np.cumsum(np.random.randn(120)) + 100
@@ -107,9 +112,8 @@ def get_data(ticker):
             "Close": price
         })
 
-    # 🔥 FIX DATA (VIKTIG)
-    df["Close"] = pd.to_numeric(df["Close"], errors="coerce")
-    df = df.dropna(subset=["Close"])
+    # 🔥 FORCE CLEAN SERIES
+    df["Close"] = pd.Series(df["Close"]).astype(float)
 
     return df
 
@@ -144,13 +148,10 @@ def create_chart(ticker, signal):
 
     fig = go.Figure()
 
-    # 🔥 PRICE FIX
-    price = pd.to_numeric(df["Close"], errors="coerce")
-    price = price.fillna(method="ffill").fillna(method="bfill")
-
+    # PRICE (FIXED)
     fig.add_trace(go.Scatter(
         x=df["Date"],
-        y=price,
+        y=df["Close"],
         name="Price",
         mode="lines",
         line=dict(width=3, color="#00bfff"),
@@ -159,7 +160,7 @@ def create_chart(ticker, signal):
 
     # BUY/SELL marker
     last_x = df["Date"].iloc[-1]
-    last_y = price.iloc[-1]
+    last_y = df["Close"].iloc[-1]
 
     color = "green" if signal == "BUY" else "red"
 
