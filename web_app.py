@@ -9,95 +9,101 @@ from core.scanner import VectorMarketScanner
 
 st.set_page_config(layout="wide", page_title="Analyrix")
 
-# ---------- STATE ----------
-if "results" not in st.session_state:
-    st.session_state.results = []
+# ---------- DATABASE ----------
+if "users_db" not in st.session_state:
+    st.session_state.users_db = {}
 
-if "pro" not in st.session_state:
-    st.session_state.pro = False
+# ---------- LANDING / LOGIN ----------
+user_email = st.text_input("Enter your email to continue")
 
-if "scan_count" not in st.session_state:
-    st.session_state.scan_count = 0
-
-if "last_scan_reset" not in st.session_state:
-    st.session_state.last_scan_reset = datetime.now()
-
-# ---------- RESET ----------
-if datetime.now() - st.session_state.last_scan_reset > timedelta(hours=24):
-    st.session_state.scan_count = 0
-    st.session_state.last_scan_reset = datetime.now()
-
-# ---------- HERO ----------
-st.markdown("""
-# 🚀 Analyrix
-
-### Find high-probability trades in seconds using AI
-
-Scan hundreds of stocks, get instant signals, and clear trade plans with entry, stop loss and take profit.
-""")
-
-col1, col2, col3 = st.columns(3)
-col1.metric("📊 Stocks Scanned", "400+")
-col2.metric("⚡ Scan Time", "<2 sec")
-col3.metric("🎯 Accuracy", "AI-driven")
-
-st.divider()
-
-# ---------- FEATURES ----------
-st.markdown("## 🔥 What you get")
-
-col1, col2 = st.columns(2)
-
-with col1:
+if not user_email:
     st.markdown("""
-- 🧠 AI trade signals  
-- 📈 Expected move prediction  
-- 🎯 Entry, stop loss, take profit  
-- ⏱️ Expected hold time  
+    # 🚀 Analyrix
+
+    ### Find high-probability trades in seconds using AI
+
+    Scan hundreds of stocks, get instant signals, and clear trade plans with entry, stop loss and take profit.
     """)
 
-with col2:
-    st.markdown("""
-- 📊 Smart charts  
-- 📉 RSI + MACD indicators  
-- ⚡ Fast market scanning  
-- 🔒 Premium insights (Pro)  
-    """)
+    col1, col2, col3 = st.columns(3)
+    col1.metric("📊 Stocks Scanned", "400+")
+    col2.metric("⚡ Scan Time", "<2 sec")
+    col3.metric("🎯 Accuracy", "AI-driven")
 
-st.divider()
+    st.divider()
 
-scanner = VectorMarketScanner()
+    st.markdown("## 🔥 What you get")
 
-# ---------- PAYWALL ----------
-if not st.session_state.pro:
-    st.info("🔓 Upgrade to Pro for unlimited scans")
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("""
+        - 🧠 AI trade signals  
+        - 📈 Expected move prediction  
+        - 🎯 Entry, stop loss, take profit  
+        - ⏱️ Expected hold time  
+        """)
+
+    with col2:
+        st.markdown("""
+        - 📊 Smart charts  
+        - 📉 RSI + MACD indicators  
+        - ⚡ Fast scanning  
+        - 🔒 Premium insights  
+        """)
+
+    st.divider()
 
     st.markdown(
         "[🚀 Get Pro Access ($19/month)](https://buy.stripe.com/14A14n6kuaaPffCdqoak000)"
     )
 
-    st.warning("🔒 Free: 3 scans per 24h")
-    st.divider()
+    st.stop()
 
-# ---------- TIMEFRAME ----------
-def get_timeframe(trade):
-    move = trade["expected_move"]
-    if move > 8:
-        return "Short-term (1–3 days)"
-    elif move > 4:
-        return "Medium-term (3–7 days)"
-    else:
-        return "Longer-term (1–2 weeks)"
+# ---------- USER SETUP ----------
+if user_email not in st.session_state.users_db:
+    st.session_state.users_db[user_email] = {
+        "plan": "free",
+        "scans": 0,
+        "last_reset": datetime.now()
+    }
 
-# ---------- DATA (FIXED) ----------
+user = st.session_state.users_db[user_email]
+
+# ---------- RESET ----------
+if datetime.now() - user["last_reset"] > timedelta(hours=24):
+    user["scans"] = 0
+    user["last_reset"] = datetime.now()
+
+# ---------- HEADER ----------
+st.markdown(f"""
+### 👤 {user_email}
+Plan: **{user['plan'].upper()}**
+Scans: {user['scans']} / {"∞" if user['plan']=="pro" else "3"}
+""")
+
+st.divider()
+
+# ---------- UPGRADE ----------
+if user["plan"] == "free":
+    st.warning("🔒 Free plan: 3 scans per day")
+
+    st.markdown(
+        "[🚀 Upgrade to PRO](https://buy.stripe.com/14A14n6kuaaPffCdqoak000)"
+    )
+
+    if st.button("I have paid"):
+        user["plan"] = "pro"
+        st.success("PRO unlocked!")
+
+# ---------- SCANNER ----------
+scanner = VectorMarketScanner()
+
+# ---------- DATA ----------
 def get_data(ticker):
     try:
         df = yf.download(ticker, period="6mo", interval="1d")
 
-        if df is None or df.empty:
-            raise Exception("No data")
-
-        # 🔥 FIX multi-index (VIKTIG)
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
 
@@ -112,14 +118,11 @@ def get_data(ticker):
             "Close": price
         })
 
-    # 🔥 FORCE CLEAN SERIES
     df["Close"] = pd.Series(df["Close"]).astype(float)
-
     return df
 
 # ---------- INDICATORS ----------
 def add_indicators(df):
-
     delta = df["Close"].diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
@@ -142,23 +145,19 @@ def add_indicators(df):
 
 # ---------- CHART ----------
 def create_chart(ticker, signal):
-
     df = get_data(ticker)
     df = add_indicators(df)
 
     fig = go.Figure()
 
-    # PRICE (FIXED)
     fig.add_trace(go.Scatter(
         x=df["Date"],
         y=df["Close"],
         name="Price",
         mode="lines",
-        line=dict(width=3, color="#00bfff"),
-        yaxis="y"
+        line=dict(width=3)
     ))
 
-    # BUY/SELL marker
     last_x = df["Date"].iloc[-1]
     last_y = df["Close"].iloc[-1]
 
@@ -170,11 +169,9 @@ def create_chart(ticker, signal):
         mode="markers+text",
         text=[signal],
         textposition="top center",
-        marker=dict(size=14, color=color),
-        name="Signal"
+        marker=dict(size=14, color=color)
     ))
 
-    # RSI
     fig.add_trace(go.Scatter(
         x=df["Date"],
         y=df["RSI"],
@@ -183,7 +180,6 @@ def create_chart(ticker, signal):
         yaxis="y2"
     ))
 
-    # MACD
     fig.add_trace(go.Scatter(
         x=df["Date"],
         y=df["MACD"],
@@ -211,44 +207,35 @@ def create_chart(ticker, signal):
     return fig
 
 # ---------- SCAN ----------
-if st.button("🚀 Scan Market Now"):
+if st.button("🚀 Scan Market"):
 
-    if not st.session_state.pro and st.session_state.scan_count >= 3:
-        st.error("🚫 Free limit reached")
+    if user["plan"] == "free" and user["scans"] >= 3:
+        st.error("🚫 Daily limit reached")
     else:
-        with st.spinner("Scanning hundreds of stocks..."):
-            time.sleep(1.5)
-            st.session_state.results = scanner.scan_market(limit=20)
-            st.session_state.scan_count += 1
+        with st.spinner("Scanning..."):
+            time.sleep(1)
+            results = scanner.scan_market(limit=10)
+            user["scans"] += 1
 
-# ---------- DISPLAY ----------
-if st.session_state.results:
+            for i, r in enumerate(results):
 
-    for i, r in enumerate(st.session_state.results):
+                st.markdown(f"""
+                ### 📊 {r['ticker']}
 
-        st.markdown(f"""
-        ### 📊 {r['ticker']}
+                **Signal:** {r['signal']}  
+                **Confidence:** {r['confidence']}%  
+                **Expected Move:** {r['expected_move']}%
+                """)
 
-        **🧠 AI Signal:** {r['signal']}  
-        **📊 AI Confidence:** {r['confidence']}%  
-        **📈 Expected Move:** {r['expected_move']}%  
-        **⚠️ Risk Level:** {r['risk']}
-        """)
+                if st.button(f"View {r['ticker']}", key=i):
 
-        if st.button(f"📊 View Chart - {r['ticker']}", key=i):
+                    fig = create_chart(r["ticker"], r["signal"])
+                    st.plotly_chart(fig, use_container_width=True)
 
-            fig = create_chart(r["ticker"], r["signal"])
-            st.plotly_chart(fig, use_container_width=True)
+                    st.markdown(f"""
+                    **Entry:** {r['entry']}  
+                    **Stop:** {r['stop_loss']}  
+                    **Take Profit:** {r['take_profit']}
+                    """)
 
-            st.markdown(f"""
-            ### 📈 Trade Plan
-
-            **Entry Price:** ${r['entry']}  
-            **Stop Loss:** ${r['stop_loss']}  
-            **Take Profit:** ${r['take_profit']}  
-
-            ### ⏱️ Expected Hold  
-            {get_timeframe(r)}
-            """)
-
-        st.divider()
+                st.divider()
