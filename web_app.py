@@ -82,7 +82,6 @@ def get_data(ticker):
 # ---------- INDICATORS ----------
 def add_indicators(df):
 
-    # RSI
     delta = df["Close"].diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
@@ -93,7 +92,6 @@ def add_indicators(df):
     rs = avg_gain / avg_loss
     df["RSI"] = 100 - (100 / (1 + rs))
 
-    # MACD
     ema12 = df["Close"].ewm(span=12).mean()
     ema26 = df["Close"].ewm(span=26).mean()
 
@@ -110,7 +108,6 @@ def create_chart(ticker):
 
     fig = go.Figure()
 
-    # PRICE
     fig.add_trace(go.Candlestick(
         x=df["Date"],
         open=df["Open"],
@@ -120,7 +117,6 @@ def create_chart(ticker):
         name="Price"
     ))
 
-    # RSI
     fig.add_trace(go.Scatter(
         x=df["Date"],
         y=df["RSI"],
@@ -128,7 +124,6 @@ def create_chart(ticker):
         yaxis="y2"
     ))
 
-    # MACD
     fig.add_trace(go.Scatter(
         x=df["Date"],
         y=df["MACD"],
@@ -147,20 +142,9 @@ def create_chart(ticker):
         template="plotly_dark",
         height=600,
         xaxis_rangeslider_visible=False,
-
         yaxis=dict(title="Price"),
-        yaxis2=dict(
-            title="RSI",
-            overlaying="y",
-            side="right",
-            position=0.95
-        ),
-        yaxis3=dict(
-            title="MACD",
-            overlaying="y",
-            side="right",
-            position=0.85
-        )
+        yaxis2=dict(overlaying="y", side="right", position=0.95),
+        yaxis3=dict(overlaying="y", side="right", position=0.85)
     )
 
     return fig
@@ -179,24 +163,44 @@ if st.button("🔍 Scan Market"):
 # ---------- DISPLAY ----------
 if st.session_state.results:
 
-    for i, r in enumerate(st.session_state.results):
+    def rank_trade(trade):
+        score = {"BUY": 3, "WATCH": 2, "AVOID": 1}
+        return (score.get(trade["signal"], 0), trade["expected_move"])
+
+    results = sorted(
+        st.session_state.results,
+        key=rank_trade,
+        reverse=True
+    )
+
+    if not st.session_state.pro:
+        results = results[:3]
+
+    for i, r in enumerate(results):
 
         st.markdown(f"""
-        ### {r['ticker']}
-        {r['signal']} | {r['confidence']}% | {r['expected_move']}%
+        ### 📊 {r['ticker']}
+
+        **🧠 AI Signal:** {r['signal']}  
+        **📊 AI Confidence:** {r['confidence']}%  
+        **📈 Expected Move:** {r['expected_move']}%  
+        **⚠️ Risk Level:** {r['risk']}
         """)
 
-        if st.button(f"📊 View {r['ticker']}", key=i):
+        if st.button(f"📊 View Chart - {r['ticker']}", key=i):
 
             fig = create_chart(r["ticker"])
             st.plotly_chart(fig, use_container_width=True)
 
             st.markdown(f"""
-            **Entry:** ${r['entry']}  
+            ### 📈 Trade Plan
+
+            **Entry Price:** ${r['entry']}  
             **Stop Loss:** ${r['stop_loss']}  
             **Take Profit:** ${r['take_profit']}  
 
-            **Expected Hold:** {get_timeframe(r)}
+            ### ⏱️ Expected Hold  
+            {get_timeframe(r)}
             """)
 
         st.divider()
