@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 from datetime import datetime, timedelta
+from plotly.subplots import make_subplots
 from core.scanner import VectorMarketScanner
 
 st.set_page_config(layout="wide", page_title="Analyrix")
@@ -68,7 +69,7 @@ st.divider()
 
 scanner = VectorMarketScanner()
 
-# ---------- PAYWALL CTA ----------
+# ---------- PAYWALL ----------
 if not st.session_state.pro:
     st.info("🔓 Upgrade to Pro for unlimited scans and full access")
 
@@ -101,7 +102,6 @@ def get_data(ticker):
         return df
 
     except:
-        # fallback
         dates = pd.date_range(end=pd.Timestamp.today(), periods=120)
         price = np.cumsum(np.random.randn(120)) + 100
 
@@ -141,45 +141,49 @@ def create_chart(ticker):
     df = get_data(ticker)
     df = add_indicators(df)
 
-    fig = go.Figure()
+    fig = make_subplots(
+        rows=3, cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.03,
+        row_heights=[0.6, 0.2, 0.2]
+    )
 
+    # 🔥 CANDLESTICKS (FIXED)
     fig.add_trace(go.Candlestick(
         x=df["Date"],
         open=df["Open"],
         high=df["High"],
         low=df["Low"],
         close=df["Close"],
+        increasing_line_color="green",
+        decreasing_line_color="red",
         name="Price"
-    ))
+    ), row=1, col=1)
 
+    # RSI
     fig.add_trace(go.Scatter(
         x=df["Date"],
         y=df["RSI"],
-        name="RSI",
-        yaxis="y2"
-    ))
+        name="RSI"
+    ), row=2, col=1)
 
+    # MACD
     fig.add_trace(go.Scatter(
         x=df["Date"],
         y=df["MACD"],
-        name="MACD",
-        yaxis="y3"
-    ))
+        name="MACD"
+    ), row=3, col=1)
 
     fig.add_trace(go.Scatter(
         x=df["Date"],
         y=df["Signal"],
-        name="Signal",
-        yaxis="y3"
-    ))
+        name="Signal"
+    ), row=3, col=1)
 
     fig.update_layout(
         template="plotly_dark",
-        height=600,
-        xaxis_rangeslider_visible=False,
-        yaxis=dict(title="Price"),
-        yaxis2=dict(overlaying="y", side="right", position=0.95),
-        yaxis3=dict(overlaying="y", side="right", position=0.85)
+        height=700,
+        xaxis_rangeslider_visible=False
     )
 
     return fig
