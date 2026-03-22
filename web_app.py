@@ -9,31 +9,23 @@ from core.scanner import VectorMarketScanner
 
 st.set_page_config(layout="wide", page_title="Analyrix")
 
-# ---------- SESSION ----------
-if "users_db" not in st.session_state:
-    st.session_state.users_db = {}
-
+# ---------- STATE ----------
 if "results" not in st.session_state:
     st.session_state.results = []
 
-# ---------- LOGIN ----------
-user_email = st.text_input("", placeholder="Enter your email to continue")
+if "pro" not in st.session_state:
+    st.session_state.pro = False
 
-# ---------- USER ----------
-if user_email and user_email not in st.session_state.users_db:
-    st.session_state.users_db[user_email] = {
-        "plan": "free",
-        "scans": 0,
-        "last_reset": datetime.now()
-    }
+if "scan_count" not in st.session_state:
+    st.session_state.scan_count = 0
 
-user = st.session_state.users_db.get(user_email)
+if "last_scan_reset" not in st.session_state:
+    st.session_state.last_scan_reset = datetime.now()
 
 # ---------- RESET ----------
-if user:
-    if datetime.now() - user["last_reset"] > timedelta(hours=24):
-        user["scans"] = 0
-        user["last_reset"] = datetime.now()
+if datetime.now() - st.session_state.last_scan_reset > timedelta(hours=24):
+    st.session_state.scan_count = 0
+    st.session_state.last_scan_reset = datetime.now()
 
 # ---------- HERO ----------
 st.markdown("""
@@ -51,6 +43,7 @@ col3.metric("🎯 Accuracy", "AI-driven")
 
 st.divider()
 
+# ---------- FEATURES ----------
 st.markdown("## 🔥 What you get")
 
 col1, col2 = st.columns(2)
@@ -61,7 +54,7 @@ with col1:
 - 📈 Expected move prediction  
 - 🎯 Entry, stop loss, take profit  
 - ⏱️ Expected hold time  
-""")
+    """)
 
 with col2:
     st.markdown("""
@@ -69,68 +62,72 @@ with col2:
 - 📉 RSI + MACD indicators  
 - ⚡ Fast market scanning  
 - 🔒 Premium insights (Pro)  
-""")
+    """)
 
 st.divider()
 
-# ---------- USER INFO ----------
-if user:
-    st.markdown(f"""
-👤 {user_email}  
-Plan: **{user['plan'].upper()}**  
-Scans: {user['scans']} / {"∞" if user['plan']=="pro" else "3"}
-""")
-
-# ---------- UPGRADE ----------
-if user and user["plan"] == "free":
-    st.warning("🔒 Free plan: 3 scans/day")
-
-    st.markdown(
-        "[🚀 Upgrade to PRO](https://buy.stripe.com/14A14n6kuaaPffCdqoak000)"
-    )
-
-    if st.button("I have paid"):
-        user["plan"] = "pro"
-
-st.divider()
-
-# ---------- SCANNER ----------
 scanner = VectorMarketScanner()
 
-if st.button("🚀 Scan Market"):
+# ---------- PAYWALL ----------
+if not st.session_state.pro:
+    st.info("🔓 Upgrade to Pro for unlimited scans")
 
-    if user and user["plan"] == "free" and user["scans"] >= 3:
-        st.error("🚫 Daily limit reached")
+    st.markdown(
+        "[🚀 Get Pro Access ($19/month)](https://buy.stripe.com/14A14n6kuaaPffCdqoak000)"
+    )
+
+    st.warning("🔒 Free: 3 scans per 24h")
+    st.divider()
+
+# ---------- TIMEFRAME ----------
+def get_timeframe(trade):
+    move = trade["expected_move"]
+    if move > 8:
+        return "Short-term (1–3 days)"
+    elif move > 4:
+        return "Medium-term (3–7 days)"
     else:
-        st.session_state.results = scanner.scan_market(limit=10)
-        if user:
-            user["scans"] += 1
+        return "Longer-term (1–2 weeks)"
 
-# ---------- DATA ----------
+# ---------- DATA (FIXED) ----------
 def get_data(ticker):
     try:
         df = yf.download(ticker, period="6mo", interval="1d")
 
+        if df is None or df.empty:
+            raise Exception("No data")
+
+        # 🔥 FIX multi-index (VIKTIG)
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
 
         df = df.reset_index()
+
     except:
         dates = pd.date_range(end=pd.Timestamp.today(), periods=120)
+        price = np.cumsum(np.random.randn(120)) + 100
+
         df = pd.DataFrame({
             "Date": dates,
-            "Close": np.cumsum(np.random.randn(120)) + 100
+            "Close": price
         })
 
+    # 🔥 FORCE CLEAN SERIES
     df["Close"] = pd.Series(df["Close"]).astype(float)
+
     return df
 
+# ---------- INDICATORS ----------
 def add_indicators(df):
+
     delta = df["Close"].diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
 
-    rs = gain.rolling(14).mean() / loss.rolling(14).mean()
+    avg_gain = gain.rolling(14).mean()
+    avg_loss = loss.rolling(14).mean()
+
+    rs = avg_gain / avg_loss
     df["RSI"] = 100 - (100 / (1 + rs))
 
     ema12 = df["Close"].ewm(span=12).mean()
@@ -140,41 +137,58 @@ def add_indicators(df):
     df["Signal"] = df["MACD"].ewm(span=9).mean()
 
     df = df.fillna(method="bfill").fillna(method="ffill")
+
     return df
 
 # ---------- CHART ----------
 def create_chart(ticker, signal):
-    df = add_indicators(get_data(ticker))
+
+    df = get_data(ticker)
+    df = add_indicators(df)
 
     fig = go.Figure()
 
+    # PRICE (FIXED)
     fig.add_trace(go.Scatter(
         x=df["Date"],
         y=df["Close"],
-        mode="lines",
         name="Price",
-        line=dict(width=3)
+        mode="lines",
+        line=dict(width=3, color="#00bfff"),
+        yaxis="y"
     ))
+
+    # BUY/SELL marker
+    last_x = df["Date"].iloc[-1]
+    last_y = df["Close"].iloc[-1]
+
+    color = "green" if signal == "BUY" else "red"
 
     fig.add_trace(go.Scatter(
-        x=[df["Date"].iloc[-1]],
-        y=[df["Close"].iloc[-1]],
+        x=[last_x],
+        y=[last_y],
         mode="markers+text",
         text=[signal],
-        textposition="top center"
+        textposition="top center",
+        marker=dict(size=14, color=color),
+        name="Signal"
     ))
 
+    # RSI
     fig.add_trace(go.Scatter(
         x=df["Date"],
         y=df["RSI"],
         name="RSI",
+        opacity=0.6,
         yaxis="y2"
     ))
 
+    # MACD
     fig.add_trace(go.Scatter(
         x=df["Date"],
         y=df["MACD"],
         name="MACD",
+        opacity=0.6,
         yaxis="y3"
     ))
 
@@ -182,6 +196,7 @@ def create_chart(ticker, signal):
         x=df["Date"],
         y=df["Signal"],
         name="Signal",
+        opacity=0.6,
         yaxis="y3"
     ))
 
@@ -195,47 +210,45 @@ def create_chart(ticker, signal):
 
     return fig
 
-# ---------- RESULTS ----------
+# ---------- SCAN ----------
+if st.button("🚀 Scan Market Now"):
+
+    if not st.session_state.pro and st.session_state.scan_count >= 3:
+        st.error("🚫 Free limit reached")
+    else:
+        with st.spinner("Scanning hundreds of stocks..."):
+            time.sleep(1.5)
+            st.session_state.results = scanner.scan_market(limit=20)
+            st.session_state.scan_count += 1
+
+# ---------- DISPLAY ----------
 if st.session_state.results:
 
     for i, r in enumerate(st.session_state.results):
 
         st.markdown(f"""
-### 📊 {r['ticker']}
+        ### 📊 {r['ticker']}
 
-**Signal:** {r['signal']}  
-**Confidence:** {r['confidence']}%  
-**Expected Move:** {r['expected_move']}%
-""")
+        **🧠 AI Signal:** {r['signal']}  
+        **📊 AI Confidence:** {r['confidence']}%  
+        **📈 Expected Move:** {r['expected_move']}%  
+        **⚠️ Risk Level:** {r['risk']}
+        """)
 
-        if st.button(f"View {r['ticker']}", key=i):
+        if st.button(f"📊 View Chart - {r['ticker']}", key=i):
 
             fig = create_chart(r["ticker"], r["signal"])
             st.plotly_chart(fig, use_container_width=True)
 
             st.markdown(f"""
-Entry: {r['entry']}  
-Stop: {r['stop_loss']}  
-Take Profit: {r['take_profit']}
-""")
+            ### 📈 Trade Plan
+
+            **Entry Price:** ${r['entry']}  
+            **Stop Loss:** ${r['stop_loss']}  
+            **Take Profit:** ${r['take_profit']}  
+
+            ### ⏱️ Expected Hold  
+            {get_timeframe(r)}
+            """)
 
         st.divider()
-
-# ---------- LOGIN MODAL ----------
-if not user_email:
-
-    st.markdown("## 🔒 Unlock Analyrix")
-
-    st.info("""
-**Free**
-- 3 scans per day
-
-**Pro**
-- Unlimited scans  
-- Full access  
-- Better signals
-""")
-
-    st.warning("Enter your email above to continue")
-
-    st.stop()
