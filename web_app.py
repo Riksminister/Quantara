@@ -27,20 +27,57 @@ if datetime.now() - st.session_state.last_scan_reset > timedelta(hours=24):
     st.session_state.scan_count = 0
     st.session_state.last_scan_reset = datetime.now()
 
-# ---------- HEADER ----------
-st.title("🚀 Analyrix")
-st.caption("AI-powered trade analysis")
+# ---------- HERO ----------
+st.markdown("""
+# 🚀 Analyrix
+
+### Find high-probability trades in seconds using AI
+
+Scan hundreds of stocks, get instant signals, and clear trade plans with entry, stop loss and take profit.
+""")
+
+col1, col2, col3 = st.columns(3)
+col1.metric("📊 Stocks Scanned", "400+")
+col2.metric("⚡ Scan Time", "<2 sec")
+col3.metric("🎯 Accuracy", "AI-driven")
+
+st.divider()
+
+# ---------- FEATURES ----------
+st.markdown("## 🔥 What you get")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    st.markdown("""
+- 🧠 AI trade signals  
+- 📈 Expected move prediction  
+- 🎯 Entry, stop loss, take profit  
+- ⏱️ Expected hold time  
+    """)
+
+with col2:
+    st.markdown("""
+- 📊 Candlestick charts  
+- 📉 RSI + MACD indicators  
+- ⚡ Fast market scanning  
+- 🔒 Premium insights (Pro)  
+    """)
+
+st.divider()
 
 scanner = VectorMarketScanner()
 
-# ---------- PAYWALL ----------
+# ---------- PAYWALL CTA ----------
 if not st.session_state.pro:
-    st.warning("🔒 Free: 3 scans per 24h")
+    st.info("🔓 Upgrade to Pro for unlimited scans and full access")
 
     st.markdown(
-        "[🚀 Unlock Pro ($19/month)](https://buy.stripe.com/14A14n6kuaaPffCdqoak000)",
-        unsafe_allow_html=True
+        "[🚀 Get Pro Access ($19/month)](https://buy.stripe.com/14A14n6kuaaPffCdqoak000)"
     )
+
+    st.warning("🔒 Free: 3 scans per 24h")
+    st.divider()
 
 # ---------- TIMEFRAME ----------
 def get_timeframe(trade):
@@ -64,11 +101,11 @@ def get_data(ticker):
         return df
 
     except:
-        # fallback data
+        # fallback
         dates = pd.date_range(end=pd.Timestamp.today(), periods=120)
         price = np.cumsum(np.random.randn(120)) + 100
 
-        df = pd.DataFrame({
+        return pd.DataFrame({
             "Date": dates,
             "Open": price,
             "High": price + 2,
@@ -76,8 +113,6 @@ def get_data(ticker):
             "Close": price,
             "Volume": np.random.randint(100000, 500000, size=120)
         })
-
-        return df
 
 # ---------- INDICATORS ----------
 def add_indicators(df):
@@ -150,7 +185,7 @@ def create_chart(ticker):
     return fig
 
 # ---------- SCAN ----------
-if st.button("🔍 Scan Market"):
+if st.button("🚀 Scan Market Now"):
 
     if not st.session_state.pro and st.session_state.scan_count >= 3:
         st.error("🚫 Free limit reached")
