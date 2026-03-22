@@ -141,52 +141,20 @@ def create_chart(ticker, signal):
     df = get_data(ticker)
     df = add_indicators(df)
 
-    # 🔥 NORMALISER (STABIL OVERLAY)
-    price = df["Close"] / df["Close"].max()
-    rsi = df["RSI"] / 100
-
-    macd = df["MACD"]
-    macd_norm = (macd - macd.min()) / (macd.max() - macd.min() + 1e-9)
-
-    signal_line = df["Signal"]
-    signal_norm = (signal_line - signal_line.min()) / (signal_line.max() - signal_line.min() + 1e-9)
-
     fig = go.Figure()
 
     # PRICE
     fig.add_trace(go.Scatter(
         x=df["Date"],
-        y=price,
+        y=df["Close"],
         name="Price",
-        line=dict(width=3)
+        line=dict(width=3),
+        yaxis="y"
     ))
 
-    # RSI
-    fig.add_trace(go.Scatter(
-        x=df["Date"],
-        y=rsi,
-        name="RSI",
-        opacity=0.4
-    ))
-
-    # MACD
-    fig.add_trace(go.Scatter(
-        x=df["Date"],
-        y=macd_norm,
-        name="MACD",
-        opacity=0.5
-    ))
-
-    fig.add_trace(go.Scatter(
-        x=df["Date"],
-        y=signal_norm,
-        name="Signal",
-        opacity=0.5
-    ))
-
-    # BUY/SELL MARKER
+    # BUY/SELL marker
     last_x = df["Date"].iloc[-1]
-    last_y = price.iloc[-1]
+    last_y = df["Close"].iloc[-1]
 
     color = "green" if signal == "BUY" else "red"
 
@@ -200,10 +168,51 @@ def create_chart(ticker, signal):
         name="Signal"
     ))
 
+    # RSI
+    fig.add_trace(go.Scatter(
+        x=df["Date"],
+        y=df["RSI"],
+        name="RSI",
+        opacity=0.6,
+        yaxis="y2"
+    ))
+
+    # MACD
+    fig.add_trace(go.Scatter(
+        x=df["Date"],
+        y=df["MACD"],
+        name="MACD",
+        opacity=0.6,
+        yaxis="y3"
+    ))
+
+    fig.add_trace(go.Scatter(
+        x=df["Date"],
+        y=df["Signal"],
+        name="Signal",
+        opacity=0.6,
+        yaxis="y3"
+    ))
+
     fig.update_layout(
         template="plotly_dark",
         height=500,
-        yaxis=dict(title="Normalized")
+
+        yaxis=dict(title="Price"),
+
+        yaxis2=dict(
+            title="RSI",
+            overlaying="y",
+            side="right",
+            position=0.95
+        ),
+
+        yaxis3=dict(
+            title="MACD",
+            overlaying="y",
+            side="right",
+            position=0.85
+        )
     )
 
     return fig
