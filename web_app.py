@@ -1,6 +1,8 @@
 import streamlit as st
 import time
 import plotly.graph_objects as go
+import pandas as pd
+import numpy as np
 import yfinance as yf
 from datetime import datetime, timedelta
 from core.scanner import VectorMarketScanner
@@ -43,7 +45,6 @@ if not st.session_state.pro:
 # ---------- TIMEFRAME ----------
 def get_timeframe(trade):
     move = trade["expected_move"]
-
     if move > 8:
         return "Short-term (1–3 days)"
     elif move > 4:
@@ -51,53 +52,118 @@ def get_timeframe(trade):
     else:
         return "Longer-term (1–2 weeks)"
 
-# ---------- CHART ----------
-def create_chart(ticker):
-
+# ---------- DATA ----------
+def get_data(ticker):
     try:
         df = yf.download(ticker, period="6mo", interval="1d")
 
-        # fallback hvis yfinance feiler
         if df is None or df.empty:
-            import pandas as pd
-            import numpy as np
+            raise Exception("No data")
 
-            dates = pd.date_range(end=pd.Timestamp.today(), periods=100)
-            price = np.cumsum(np.random.randn(100)) + 100
+        df = df.reset_index()
+        return df
 
-            df = pd.DataFrame({
-                "Date": dates,
-                "Open": price,
-                "High": price + 2,
-                "Low": price - 2,
-                "Close": price
-            })
-        else:
-            df = df.reset_index()
+    except:
+        # fallback data
+        dates = pd.date_range(end=pd.Timestamp.today(), periods=120)
+        price = np.cumsum(np.random.randn(120)) + 100
 
-        fig = go.Figure()
+        df = pd.DataFrame({
+            "Date": dates,
+            "Open": price,
+            "High": price + 2,
+            "Low": price - 2,
+            "Close": price,
+            "Volume": np.random.randint(100000, 500000, size=120)
+        })
 
-        fig.add_trace(go.Ohlc(
-            x=df["Date"],
-            open=df["Open"],
-            high=df["High"],
-            low=df["Low"],
-            close=df["Close"],
-            increasing_line_color="green",
-            decreasing_line_color="red"
-        ))
+        return df
 
-        fig.update_layout(
-            template="plotly_dark",
-            height=500,
-            xaxis_rangeslider_visible=False
+# ---------- INDICATORS ----------
+def add_indicators(df):
+
+    # RSI
+    delta = df["Close"].diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+
+    avg_gain = gain.rolling(14).mean()
+    avg_loss = loss.rolling(14).mean()
+
+    rs = avg_gain / avg_loss
+    df["RSI"] = 100 - (100 / (1 + rs))
+
+    # MACD
+    ema12 = df["Close"].ewm(span=12).mean()
+    ema26 = df["Close"].ewm(span=26).mean()
+
+    df["MACD"] = ema12 - ema26
+    df["Signal"] = df["MACD"].ewm(span=9).mean()
+
+    return df
+
+# ---------- CHART ----------
+def create_chart(ticker):
+
+    df = get_data(ticker)
+    df = add_indicators(df)
+
+    fig = go.Figure()
+
+    # PRICE
+    fig.add_trace(go.Candlestick(
+        x=df["Date"],
+        open=df["Open"],
+        high=df["High"],
+        low=df["Low"],
+        close=df["Close"],
+        name="Price"
+    ))
+
+    # RSI
+    fig.add_trace(go.Scatter(
+        x=df["Date"],
+        y=df["RSI"],
+        name="RSI",
+        yaxis="y2"
+    ))
+
+    # MACD
+    fig.add_trace(go.Scatter(
+        x=df["Date"],
+        y=df["MACD"],
+        name="MACD",
+        yaxis="y3"
+    ))
+
+    fig.add_trace(go.Scatter(
+        x=df["Date"],
+        y=df["Signal"],
+        name="Signal",
+        yaxis="y3"
+    ))
+
+    fig.update_layout(
+        template="plotly_dark",
+        height=600,
+        xaxis_rangeslider_visible=False,
+
+        yaxis=dict(title="Price"),
+        yaxis2=dict(
+            title="RSI",
+            overlaying="y",
+            side="right",
+            position=0.95
+        ),
+        yaxis3=dict(
+            title="MACD",
+            overlaying="y",
+            side="right",
+            position=0.85
         )
+    )
 
-        return fig
-
-    except Exception as e:
-        st.error(f"Chart error: {e}")
-        return None
+    return fig
 
 # ---------- SCAN ----------
 if st.button("🔍 Scan Market"):
@@ -113,52 +179,24 @@ if st.button("🔍 Scan Market"):
 # ---------- DISPLAY ----------
 if st.session_state.results:
 
-    def rank_trade(trade):
-        score = {"BUY": 3, "WATCH": 2, "AVOID": 1}
-        return (score.get(trade["signal"], 0), trade["expected_move"])
-
-    results = sorted(
-        st.session_state.results,
-        key=rank_trade,
-        reverse=True
-    )
-
-    if not st.session_state.pro:
-        results = results[:3]
-
-    for i, r in enumerate(results):
+    for i, r in enumerate(st.session_state.results):
 
         st.markdown(f"""
-        ### #{i+1} {r['ticker']}
-        **Signal:** {r['signal']}  
-        **Confidence:** {r['confidence']}%  
-        **Expected Move:** {r['expected_move']}%  
-        **Risk:** {r['risk']}
+        ### {r['ticker']}
+        {r['signal']} | {r['confidence']}% | {r['expected_move']}%
         """)
 
-        # 🔥 DIREKTE KNAPP (INGEN BUG)
-        if st.button(f"📊 View Chart - {r['ticker']}", key=f"btn_{i}"):
-
-            st.write("Loading chart...")
+        if st.button(f"📊 View {r['ticker']}", key=i):
 
             fig = create_chart(r["ticker"])
-
-            if fig:
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.error("Chart failed")
-
-            timeframe = get_timeframe(r)
+            st.plotly_chart(fig, use_container_width=True)
 
             st.markdown(f"""
-            ### 📈 Trade Plan
-
             **Entry:** ${r['entry']}  
             **Stop Loss:** ${r['stop_loss']}  
             **Take Profit:** ${r['take_profit']}  
 
-            ### ⏱️ Expected Hold  
-            {timeframe}
+            **Expected Hold:** {get_timeframe(r)}
             """)
 
         st.divider()
