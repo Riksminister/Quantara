@@ -16,64 +16,49 @@ if "users_db" not in st.session_state:
 if "results" not in st.session_state:
     st.session_state.results = []
 
-# ---------- LANDING ----------
-user_email = st.text_input("Enter your email to continue")
+# ---------- INPUT ----------
+user_email = st.text_input("", placeholder="")
 
-if not user_email:
-    st.markdown("""
-    # 🚀 Analyrix
-    ### Find high-probability trades in seconds using AI
-    """)
-
-    col1, col2, col3 = st.columns(3)
-    col1.metric("📊 Stocks Scanned", "400+")
-    col2.metric("⚡ Scan Time", "<2 sec")
-    col3.metric("🎯 Accuracy", "AI-driven")
-
-    st.divider()
-
-    st.markdown("## 🔥 What you get")
-    st.markdown("""
-    - AI trade signals  
-    - Expected move prediction  
-    - Entry, stop loss, take profit  
-    - RSI + MACD charts  
-    """)
-
-    st.markdown("[🚀 Get Pro Access](https://buy.stripe.com/14A14n6kuaaPffCdqoak000)")
-    st.stop()
-
-# ---------- USER ----------
-if user_email not in st.session_state.users_db:
+# ---------- USER SETUP ----------
+if user_email and user_email not in st.session_state.users_db:
     st.session_state.users_db[user_email] = {
         "plan": "free",
         "scans": 0,
         "last_reset": datetime.now()
     }
 
-user = st.session_state.users_db[user_email]
+user = st.session_state.users_db.get(user_email, None)
 
-# reset
-if datetime.now() - user["last_reset"] > timedelta(hours=24):
-    user["scans"] = 0
-    user["last_reset"] = datetime.now()
+# ---------- RESET ----------
+if user:
+    if datetime.now() - user["last_reset"] > timedelta(hours=24):
+        user["scans"] = 0
+        user["last_reset"] = datetime.now()
 
 # ---------- HEADER ----------
-st.markdown(f"""
-### 👤 {user_email}
-Plan: **{user['plan'].upper()}**
-Scans: {user['scans']} / {"∞" if user['plan']=="pro" else "3"}
-""")
+st.markdown("# 🚀 Analyrix")
+st.caption("AI-powered trade analysis")
+
+if user:
+    st.markdown(f"""
+    👤 {user_email}  
+    Plan: **{user['plan'].upper()}**  
+    Scans: {user['scans']} / {"∞" if user['plan']=="pro" else "3"}
+    """)
 
 st.divider()
 
-# ---------- UPGRADE ----------
-if user["plan"] == "free":
-    st.warning("🔒 Free plan: 3 scans/day")
-    st.markdown("[🚀 Upgrade](https://buy.stripe.com/14A14n6kuaaPffCdqoak000)")
+# ---------- SCANNER ----------
+scanner = VectorMarketScanner()
 
-    if st.button("I have paid"):
-        user["plan"] = "pro"
+if st.button("🚀 Scan Market"):
+
+    if user and user["plan"] == "free" and user["scans"] >= 3:
+        st.error("🚫 Daily limit reached")
+    else:
+        st.session_state.results = scanner.scan_market(limit=10)
+        if user:
+            user["scans"] += 1
 
 # ---------- DATA ----------
 def get_data(ticker):
@@ -96,7 +81,6 @@ def get_data(ticker):
 
 def add_indicators(df):
     delta = df["Close"].diff()
-
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
 
@@ -110,7 +94,6 @@ def add_indicators(df):
     df["Signal"] = df["MACD"].ewm(span=9).mean()
 
     df = df.fillna(method="bfill").fillna(method="ffill")
-
     return df
 
 # ---------- CHART ----------
@@ -122,8 +105,8 @@ def create_chart(ticker, signal):
     fig.add_trace(go.Scatter(
         x=df["Date"],
         y=df["Close"],
-        name="Price",
         mode="lines",
+        name="Price",
         line=dict(width=3)
     ))
 
@@ -166,25 +149,17 @@ def create_chart(ticker, signal):
 
     return fig
 
-# ---------- SCANNER ----------
-scanner = VectorMarketScanner()
-
-if st.button("🚀 Scan Market"):
-
-    if user["plan"] == "free" and user["scans"] >= 3:
-        st.error("🚫 Limit reached")
-    else:
-        st.session_state.results = scanner.scan_market(limit=10)
-        user["scans"] += 1
-
 # ---------- DISPLAY ----------
 if st.session_state.results:
 
     for i, r in enumerate(st.session_state.results):
 
         st.markdown(f"""
-        ### {r['ticker']}
-        {r['signal']} | {r['confidence']}% | {r['expected_move']}%
+        ### 📊 {r['ticker']}
+
+        **Signal:** {r['signal']}  
+        **Confidence:** {r['confidence']}%  
+        **Expected Move:** {r['expected_move']}%
         """)
 
         if st.button(f"View {r['ticker']}", key=i):
@@ -192,8 +167,52 @@ if st.session_state.results:
             fig = create_chart(r["ticker"], r["signal"])
             st.plotly_chart(fig, use_container_width=True)
 
-            st.write(f"Entry: {r['entry']}")
-            st.write(f"Stop: {r['stop_loss']}")
-            st.write(f"TP: {r['take_profit']}")
+            st.markdown(f"""
+            Entry: {r['entry']}  
+            Stop: {r['stop_loss']}  
+            Take Profit: {r['take_profit']}
+            """)
 
         st.divider()
+
+# ---------- OVERLAY ----------
+if not user_email:
+
+    st.markdown("""
+    <style>
+    .overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.85);
+        z-index: 9999;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        color: white;
+        text-align: center;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+    <div class="overlay">
+        <div>
+            <h1>🔒 Unlock Analyrix</h1>
+            <p>See full AI trade signals and charts</p>
+
+            <h3>Free</h3>
+            <p>3 scans per day</p>
+
+            <h3>Pro</h3>
+            <p>Unlimited scans<br>Full access</p>
+
+            <br>
+            <p>Enter email above to continue</p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.stop()
