@@ -98,19 +98,20 @@ def get_data(ticker):
             raise Exception("No data")
 
         df = df.reset_index()
-        return df
-
     except:
         dates = pd.date_range(end=pd.Timestamp.today(), periods=120)
         price = np.cumsum(np.random.randn(120)) + 100
 
-        return pd.DataFrame({
+        df = pd.DataFrame({
             "Date": dates,
-            "Open": price,
-            "High": price + 2,
-            "Low": price - 2,
             "Close": price
         })
+
+    # 🔥 FIX DATA (VIKTIG)
+    df["Close"] = pd.to_numeric(df["Close"], errors="coerce")
+    df = df.dropna(subset=["Close"])
+
+    return df
 
 # ---------- INDICATORS ----------
 def add_indicators(df):
@@ -143,18 +144,22 @@ def create_chart(ticker, signal):
 
     fig = go.Figure()
 
-    # PRICE
+    # 🔥 PRICE FIX
+    price = pd.to_numeric(df["Close"], errors="coerce")
+    price = price.fillna(method="ffill").fillna(method="bfill")
+
     fig.add_trace(go.Scatter(
         x=df["Date"],
-        y=df["Close"],
+        y=price,
         name="Price",
-        line=dict(width=3),
+        mode="lines",
+        line=dict(width=3, color="#00bfff"),
         yaxis="y"
     ))
 
     # BUY/SELL marker
     last_x = df["Date"].iloc[-1]
-    last_y = df["Close"].iloc[-1]
+    last_y = price.iloc[-1]
 
     color = "green" if signal == "BUY" else "red"
 
@@ -197,22 +202,9 @@ def create_chart(ticker, signal):
     fig.update_layout(
         template="plotly_dark",
         height=500,
-
         yaxis=dict(title="Price"),
-
-        yaxis2=dict(
-            title="RSI",
-            overlaying="y",
-            side="right",
-            position=0.95
-        ),
-
-        yaxis3=dict(
-            title="MACD",
-            overlaying="y",
-            side="right",
-            position=0.85
-        )
+        yaxis2=dict(overlaying="y", side="right", position=0.95),
+        yaxis3=dict(overlaying="y", side="right", position=0.85)
     )
 
     return fig
