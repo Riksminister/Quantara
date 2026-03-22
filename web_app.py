@@ -11,9 +11,6 @@ st.set_page_config(layout="wide", page_title="Analyrix")
 if "results" not in st.session_state:
     st.session_state.results = []
 
-if "selected_index" not in st.session_state:
-    st.session_state.selected_index = None
-
 if "pro" not in st.session_state:
     st.session_state.pro = False
 
@@ -29,7 +26,7 @@ if datetime.now() - st.session_state.last_scan_reset > timedelta(hours=24):
     st.session_state.last_scan_reset = datetime.now()
 
 # ---------- HEADER ----------
-st.markdown("# 🚀 Analyrix")
+st.title("🚀 Analyrix")
 st.caption("AI-powered trade analysis")
 
 scanner = VectorMarketScanner()
@@ -54,14 +51,14 @@ def get_timeframe(trade):
     else:
         return "Longer-term (1–2 weeks)"
 
-# ---------- CHART (ALWAYS WORKS) ----------
+# ---------- CHART ----------
 def create_chart(ticker):
 
     try:
         df = yf.download(ticker, period="6mo", interval="1d")
 
+        # fallback hvis yfinance feiler
         if df is None or df.empty:
-            # fallback chart
             import pandas as pd
             import numpy as np
 
@@ -75,7 +72,6 @@ def create_chart(ticker):
                 "Low": price - 2,
                 "Close": price
             })
-
         else:
             df = df.reset_index()
 
@@ -107,12 +103,11 @@ def create_chart(ticker):
 if st.button("🔍 Scan Market"):
 
     if not st.session_state.pro and st.session_state.scan_count >= 3:
-        st.error("🚫 Limit reached")
+        st.error("🚫 Free limit reached")
     else:
         with st.spinner("Scanning hundreds of stocks..."):
             time.sleep(1.5)
             st.session_state.results = scanner.scan_market(limit=20)
-            st.session_state.selected_index = None
             st.session_state.scan_count += 1
 
 # ---------- DISPLAY ----------
@@ -141,15 +136,17 @@ if st.session_state.results:
         **Risk:** {r['risk']}
         """)
 
-        if st.button("📊 View Chart", key=f"btn_{i}"):
-            st.session_state.selected_index = i
+        # 🔥 DIREKTE KNAPP (INGEN BUG)
+        if st.button(f"📊 View Chart - {r['ticker']}", key=f"btn_{i}"):
 
-        if st.session_state.selected_index == i:
+            st.write("Loading chart...")
 
             fig = create_chart(r["ticker"])
 
             if fig:
                 st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.error("Chart failed")
 
             timeframe = get_timeframe(r)
 
