@@ -43,17 +43,16 @@ if not st.session_state.pro:
         unsafe_allow_html=True
     )
 
-# ---------- SCAN ----------
-if st.button("🔍 Scan Market"):
+# ---------- TIMEFRAME ----------
+def get_timeframe(trade):
+    move = trade["expected_move"]
 
-    if not st.session_state.pro and st.session_state.scan_count >= 3:
-        st.error("🚫 Limit reached")
+    if move > 8:
+        return "Short-term (1–3 days)"
+    elif move > 4:
+        return "Medium-term (3–7 days)"
     else:
-        with st.spinner("Scanning hundreds of stocks..."):
-            time.sleep(1.5)
-            st.session_state.results = scanner.scan_market(limit=20)
-            st.session_state.selected_index = None
-            st.session_state.scan_count += 1
+        return "Longer-term (1–2 weeks)"
 
 # ---------- CHART ----------
 def create_chart(ticker):
@@ -85,6 +84,18 @@ def create_chart(ticker):
 
     return fig
 
+# ---------- SCAN ----------
+if st.button("🔍 Scan Market"):
+
+    if not st.session_state.pro and st.session_state.scan_count >= 3:
+        st.error("🚫 Limit reached")
+    else:
+        with st.spinner("Scanning hundreds of stocks..."):
+            time.sleep(1.5)
+            st.session_state.results = scanner.scan_market(limit=20)
+            st.session_state.selected_index = None
+            st.session_state.scan_count += 1
+
 # ---------- DISPLAY ----------
 if st.session_state.results:
 
@@ -105,20 +116,33 @@ if st.session_state.results:
 
         st.markdown(f"""
         ### #{i+1} {r['ticker']}
-        {r['signal']} | {r['confidence']}% | {r['expected_move']}%
+        **Signal:** {r['signal']}  
+        **Confidence:** {r['confidence']}%  
+        **Expected Move:** {r['expected_move']}%  
+        **Risk:** {r['risk']}
         """)
 
-        if st.button("📊 View Chart", key=f"btn{i}"):
+        if st.button("📊 View Chart", key=f"btn_{i}"):
             st.session_state.selected_index = i
 
         if st.session_state.selected_index == i:
 
             fig = create_chart(r["ticker"])
+
             if fig:
                 st.plotly_chart(fig, use_container_width=True)
 
-            st.write(f"Entry: ${r['entry']}")
-            st.write(f"Stop Loss: ${r['stop_loss']}")
-            st.write(f"Take Profit: ${r['take_profit']}")
+            timeframe = get_timeframe(r)
+
+            st.markdown(f"""
+            ### 📈 Trade Plan
+
+            **Entry:** ${r['entry']}  
+            **Stop Loss:** ${r['stop_loss']}  
+            **Take Profit:** ${r['take_profit']}  
+
+            ### ⏱️ Expected Hold  
+            {timeframe}
+            """)
 
         st.divider()
