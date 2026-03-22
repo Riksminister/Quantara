@@ -5,7 +5,6 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 from datetime import datetime, timedelta
-from plotly.subplots import make_subplots
 from core.scanner import VectorMarketScanner
 
 st.set_page_config(layout="wide", page_title="Analyrix")
@@ -110,8 +109,7 @@ def get_data(ticker):
             "Open": price,
             "High": price + 2,
             "Low": price - 2,
-            "Close": price,
-            "Volume": np.random.randint(100000, 500000, size=120)
+            "Close": price
         })
 
 # ---------- INDICATORS ----------
@@ -141,20 +139,15 @@ def create_chart(ticker, signal):
     df = get_data(ticker)
     df = add_indicators(df)
 
-    fig = make_subplots(
-        rows=3, cols=1,
-        shared_xaxes=True,
-        vertical_spacing=0.03,
-        row_heights=[0.6, 0.2, 0.2]
-    )
+    fig = go.Figure()
 
-    # PRICE LINE (CLEAN)
+    # 🔥 PRICE
     fig.add_trace(go.Scatter(
         x=df["Date"],
         y=df["Close"],
         name="Price",
-        line=dict(width=2)
-    ), row=1, col=1)
+        line=dict(width=3)
+    ))
 
     # 🔥 BUY/SELL MARKER
     last_x = df["Date"].iloc[-1]
@@ -168,34 +161,36 @@ def create_chart(ticker, signal):
         mode="markers+text",
         text=[signal],
         textposition="top center",
-        marker=dict(size=12, color=color),
+        marker=dict(size=14, color=color),
         name="Signal"
-    ), row=1, col=1)
+    ))
 
-    # RSI
+    # RSI (scaled)
     fig.add_trace(go.Scatter(
         x=df["Date"],
-        y=df["RSI"],
-        name="RSI"
-    ), row=2, col=1)
+        y=df["RSI"] * (df["Close"].max() / 100),
+        name="RSI",
+        opacity=0.5
+    ))
 
-    # MACD
+    # MACD (scaled)
     fig.add_trace(go.Scatter(
         x=df["Date"],
-        y=df["MACD"],
-        name="MACD"
-    ), row=3, col=1)
+        y=df["MACD"] * 10 + df["Close"].mean(),
+        name="MACD",
+        opacity=0.6
+    ))
 
     fig.add_trace(go.Scatter(
         x=df["Date"],
-        y=df["Signal"],
-        name="Signal"
-    ), row=3, col=1)
+        y=df["Signal"] * 10 + df["Close"].mean(),
+        name="Signal",
+        opacity=0.6
+    ))
 
     fig.update_layout(
         template="plotly_dark",
-        height=700,
-        xaxis_rangeslider_visible=False
+        height=500
     )
 
     return fig
