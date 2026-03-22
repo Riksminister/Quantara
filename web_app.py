@@ -16,8 +16,8 @@ if "users_db" not in st.session_state:
 if "results" not in st.session_state:
     st.session_state.results = []
 
-# ---------- INPUT ----------
-user_email = st.text_input("", placeholder="")
+# ---------- LOGIN INPUT ----------
+user_email = st.text_input("", placeholder="Enter your email to continue")
 
 # ---------- USER SETUP ----------
 if user_email and user_email not in st.session_state.users_db:
@@ -35,16 +35,62 @@ if user:
         user["scans"] = 0
         user["last_reset"] = datetime.now()
 
-# ---------- HEADER ----------
-st.markdown("# 🚀 Analyrix")
-st.caption("AI-powered trade analysis")
+# ---------- HERO / LANDING (ALLTID SYNLIG) ----------
+st.markdown("""
+# 🚀 Analyrix
 
+### Find high-probability trades in seconds using AI
+
+Scan hundreds of stocks, get instant signals, and clear trade plans with entry, stop loss and take profit.
+""")
+
+col1, col2, col3 = st.columns(3)
+col1.metric("📊 Stocks Scanned", "400+")
+col2.metric("⚡ Scan Time", "<2 sec")
+col3.metric("🎯 Accuracy", "AI-driven")
+
+st.divider()
+
+st.markdown("## 🔥 What you get")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    st.markdown("""
+- 🧠 AI trade signals  
+- 📈 Expected move prediction  
+- 🎯 Entry, stop loss, take profit  
+- ⏱️ Expected hold time  
+""")
+
+with col2:
+    st.markdown("""
+- 📊 Smart charts  
+- 📉 RSI + MACD indicators  
+- ⚡ Fast market scanning  
+- 🔒 Premium insights (Pro)  
+""")
+
+st.divider()
+
+# ---------- USER INFO ----------
 if user:
     st.markdown(f"""
-    👤 {user_email}  
-    Plan: **{user['plan'].upper()}**  
-    Scans: {user['scans']} / {"∞" if user['plan']=="pro" else "3"}
-    """)
+👤 {user_email}  
+Plan: **{user['plan'].upper()}**  
+Scans: {user['scans']} / {"∞" if user['plan']=="pro" else "3"}
+""")
+
+# ---------- UPGRADE ----------
+if user and user["plan"] == "free":
+    st.warning("🔒 Free plan: 3 scans/day")
+
+    st.markdown(
+        "[🚀 Upgrade to PRO](https://buy.stripe.com/14A14n6kuaaPffCdqoak000)"
+    )
+
+    if st.button("I have paid"):
+        user["plan"] = "pro"
 
 st.divider()
 
@@ -81,6 +127,7 @@ def get_data(ticker):
 
 def add_indicators(df):
     delta = df["Close"].diff()
+
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
 
@@ -94,6 +141,7 @@ def add_indicators(df):
     df["Signal"] = df["MACD"].ewm(span=9).mean()
 
     df = df.fillna(method="bfill").fillna(method="ffill")
+
     return df
 
 # ---------- CHART ----------
@@ -155,12 +203,12 @@ if st.session_state.results:
     for i, r in enumerate(st.session_state.results):
 
         st.markdown(f"""
-        ### 📊 {r['ticker']}
+### 📊 {r['ticker']}
 
-        **Signal:** {r['signal']}  
-        **Confidence:** {r['confidence']}%  
-        **Expected Move:** {r['expected_move']}%
-        """)
+**Signal:** {r['signal']}  
+**Confidence:** {r['confidence']}%  
+**Expected Move:** {r['expected_move']}%
+""")
 
         if st.button(f"View {r['ticker']}", key=i):
 
@@ -168,10 +216,10 @@ if st.session_state.results:
             st.plotly_chart(fig, use_container_width=True)
 
             st.markdown(f"""
-            Entry: {r['entry']}  
-            Stop: {r['stop_loss']}  
-            Take Profit: {r['take_profit']}
-            """)
+Entry: {r['entry']}  
+Stop: {r['stop_loss']}  
+Take Profit: {r['take_profit']}
+""")
 
         st.divider()
 
@@ -186,7 +234,8 @@ if not user_email:
         left: 0;
         width: 100%;
         height: 100%;
-        background: rgba(0,0,0,0.85);
+        background: rgba(0,0,0,0.92);
+        backdrop-filter: blur(6px);
         z-index: 9999;
         display: flex;
         justify-content: center;
@@ -201,16 +250,16 @@ if not user_email:
     <div class="overlay">
         <div>
             <h1>🔒 Unlock Analyrix</h1>
-            <p>See full AI trade signals and charts</p>
+            <p>AI-powered trade signals in seconds</p>
 
             <h3>Free</h3>
             <p>3 scans per day</p>
 
             <h3>Pro</h3>
-            <p>Unlimited scans<br>Full access</p>
+            <p>Unlimited scans<br>Full access<br>Better signals</p>
 
             <br>
-            <p>Enter email above to continue</p>
+            <p>Enter your email above to continue</p>
         </div>
     </div>
     """, unsafe_allow_html=True)
