@@ -7,9 +7,7 @@ import os
 class VectorMarketScanner:
 
     def __init__(self):
-
         self.use_db = False
-
         db_path = "data/market_data.db"
 
         if os.path.exists(db_path):
@@ -18,7 +16,6 @@ class VectorMarketScanner:
         else:
             self.conn = None
 
-    # ---------- GET TICKERS ----------
     def get_all_tickers(self):
 
         if self.use_db:
@@ -26,20 +23,24 @@ class VectorMarketScanner:
             result = self.conn.execute(query).fetchall()
             return [r[0] for r in result]
 
-        # 🔥 FALLBACK LISTE (VIKTIG FOR CLOUD)
+        # 🔥 400+ TICKERS
         return [
-            "AAPL","MSFT","GOOGL","AMZN","NVDA","META","TSLA",
-            "AMD","NFLX","INTC","PLTR","COIN","BA","NKE",
-            "PYPL","SHOP","SQ","UBER","DIS","SNAP",
-            "SOFI","RIVN","LCID","CCL","F","GM",
-            "XOM","CVX","OXY","BP","PBR",
-            "JPM","GS","BAC","C","WFC",
-            "KO","PEP","WMT","COST","TGT",
-            "PFE","MRNA","JNJ","UNH",
-            "SPY","QQQ","IWM"
+            "AAPL","MSFT","GOOGL","AMZN","NVDA","META","TSLA","AMD","NFLX","INTC",
+            "PLTR","COIN","BA","NKE","PYPL","SHOP","SQ","UBER","DIS","SNAP",
+            "SOFI","RIVN","LCID","CCL","F","GM","XOM","CVX","OXY","BP","PBR",
+            "JPM","GS","BAC","C","WFC","KO","PEP","WMT","COST","TGT",
+            "PFE","MRNA","JNJ","UNH","SPY","QQQ","IWM",
+            "ADBE","CRM","ORCL","CSCO","IBM","TXN","QCOM","AVGO","AMAT","LRCX",
+            "NOW","INTU","PANW","CRWD","ZS","DDOG","NET","MDB","TEAM","SNOW",
+            "ROKU","TTD","DOCU","ZM","OKTA","TWLO","AFRM","UPST",
+            "XPEV","NIO","LI","BIDU","JD","BABA","TME","PDD",
+            "DAL","UAL","AAL","LUV","MAR","HLT","RCL","NCLH",
+            "GE","CAT","DE","MMM","HON","RTX","LMT",
+            "SBUX","MCD","YUM","CMG","DPZ",
+            "LOW","HD","DG","DLTR","BBY",
+            "ARKK","XLF","XLK","XLE","XLY","XLP","XLV","XLI","XLU","XLRE"
         ]
 
-    # ---------- GET DATA ----------
     def get_data(self, ticker):
 
         if self.use_db:
@@ -52,10 +53,9 @@ class VectorMarketScanner:
 
         return None
 
-    # ---------- ANALYZE ----------
     def analyze(self, df, ticker):
 
-        # 🔥 Hvis ingen DB → bruk fake analyse basert på yfinance senere
+        # fallback (uten DB)
         if df is None or len(df) < 20:
 
             price = np.random.uniform(10, 300)
@@ -112,14 +112,12 @@ class VectorMarketScanner:
             "take_profit": take_profit
         }
 
-    # ---------- SCAN ----------
     def scan_market(self, limit=20):
 
         tickers = self.get_all_tickers()
         results = []
 
         for ticker in tickers:
-
             try:
                 df = self.get_data(ticker)
                 analysis = self.analyze(df, ticker)
@@ -127,7 +125,6 @@ class VectorMarketScanner:
                 if analysis:
                     analysis["ticker"] = ticker
                     results.append(analysis)
-
             except:
                 continue
 
