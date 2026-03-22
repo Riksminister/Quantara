@@ -70,7 +70,7 @@ scanner = VectorMarketScanner()
 
 # ---------- PAYWALL ----------
 if not st.session_state.pro:
-    st.info("🔓 Upgrade to Pro for unlimited scans and full access")
+    st.info("🔓 Upgrade to Pro for unlimited scans")
 
     st.markdown(
         "[🚀 Get Pro Access ($19/month)](https://buy.stripe.com/14A14n6kuaaPffCdqoak000)"
@@ -101,6 +101,7 @@ def get_data(ticker):
         return df
 
     except:
+        # fallback data
         dates = pd.date_range(end=pd.Timestamp.today(), periods=120)
         price = np.cumsum(np.random.randn(120)) + 100
 
@@ -131,6 +132,9 @@ def add_indicators(df):
     df["MACD"] = ema12 - ema26
     df["Signal"] = df["MACD"].ewm(span=9).mean()
 
+    # 🔥 FIX NAN
+    df = df.fillna(method="bfill").fillna(method="ffill")
+
     return df
 
 # ---------- CHART ----------
@@ -141,15 +145,16 @@ def create_chart(ticker, signal):
 
     fig = go.Figure()
 
-    # 🔥 PRICE
+    # PRICE
     fig.add_trace(go.Scatter(
         x=df["Date"],
         y=df["Close"],
         name="Price",
-        line=dict(width=3)
+        line=dict(width=3),
+        yaxis="y1"
     ))
 
-    # 🔥 BUY/SELL MARKER
+    # BUY/SELL MARKER
     last_x = df["Date"].iloc[-1]
     last_y = df["Close"].iloc[-1]
 
@@ -162,35 +167,45 @@ def create_chart(ticker, signal):
         text=[signal],
         textposition="top center",
         marker=dict(size=14, color=color),
-        name="Signal"
-    ))
-
-    # RSI (scaled)
-    fig.add_trace(go.Scatter(
-        x=df["Date"],
-        y=df["RSI"] * (df["Close"].max() / 100),
-        name="RSI",
-        opacity=0.5
-    ))
-
-    # MACD (scaled)
-    fig.add_trace(go.Scatter(
-        x=df["Date"],
-        y=df["MACD"] * 10 + df["Close"].mean(),
-        name="MACD",
-        opacity=0.6
-    ))
-
-    fig.add_trace(go.Scatter(
-        x=df["Date"],
-        y=df["Signal"] * 10 + df["Close"].mean(),
         name="Signal",
-        opacity=0.6
+        yaxis="y1"
+    ))
+
+    # RSI
+    fig.add_trace(go.Scatter(
+        x=df["Date"],
+        y=df["RSI"],
+        name="RSI",
+        opacity=0.6,
+        yaxis="y2"
+    ))
+
+    # MACD
+    fig.add_trace(go.Scatter(
+        x=df["Date"],
+        y=df["MACD"],
+        name="MACD",
+        opacity=0.6,
+        yaxis="y2"
+    ))
+
+    fig.add_trace(go.Scatter(
+        x=df["Date"],
+        y=df["Signal"],
+        name="Signal",
+        opacity=0.6,
+        yaxis="y2"
     ))
 
     fig.update_layout(
         template="plotly_dark",
-        height=500
+        height=500,
+        yaxis=dict(title="Price"),
+        yaxis2=dict(
+            title="Indicators",
+            overlaying="y",
+            side="right"
+        )
     )
 
     return fig
@@ -209,20 +224,7 @@ if st.button("🚀 Scan Market Now"):
 # ---------- DISPLAY ----------
 if st.session_state.results:
 
-    def rank_trade(trade):
-        score = {"BUY": 3, "WATCH": 2, "AVOID": 1}
-        return (score.get(trade["signal"], 0), trade["expected_move"])
-
-    results = sorted(
-        st.session_state.results,
-        key=rank_trade,
-        reverse=True
-    )
-
-    if not st.session_state.pro:
-        results = results[:3]
-
-    for i, r in enumerate(results):
+    for i, r in enumerate(st.session_state.results):
 
         st.markdown(f"""
         ### 📊 {r['ticker']}
