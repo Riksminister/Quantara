@@ -7,7 +7,7 @@ class VectorMarketScanner:
 
     def __init__(self):
 
-        # 🔥 BASE LIST (store + liquid stocks)
+        # 🔥 BASE (REAL STOCKS)
         self.base_tickers = [
             "AAPL","MSFT","NVDA","AMZN","GOOGL","META","TSLA","AMD","NFLX","INTC",
             "BABA","PLTR","COIN","SHOP","SQ","UBER","DIS","PYPL","CRM","ORCL",
@@ -16,17 +16,14 @@ class VectorMarketScanner:
             "ROKU","DOCU","AI","IONQ","SOFI","HOOD","DKNG","AFRM","UPST","PATH"
         ]
 
-        # 🔥 GENERATE MORE TICKERS (US STOCK POOL)
+        # 🔥 BUILD TO ~800
+        self.tickers = self.base_tickers.copy()
         alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
-        generated = set()
-
-        while len(generated) < 800:
-            length = random.choice([2, 3, 4])
-            ticker = "".join(random.choices(alphabet, k=length))
-            generated.add(ticker)
-
-        self.tickers = list(set(self.base_tickers + list(generated)))
+        while len(self.tickers) < 800:
+            ticker = "".join(random.choices(alphabet, k=3))
+            if ticker not in self.tickers:
+                self.tickers.append(ticker)
 
     # ---------- DATA ----------
     def get_data(self, ticker):
@@ -93,7 +90,7 @@ class VectorMarketScanner:
         signal = last["Signal"]
         price = last["Close"]
 
-        # 🔥 SIGNAL LOGIC
+        # 🔥 SIGNAL
         if rsi < 35 and macd > signal:
             trade_signal = "BUY"
         elif rsi > 65 and macd < signal:
@@ -130,11 +127,11 @@ class VectorMarketScanner:
             "take_profit": round(price * (1 + expected_move / 100), 2)
         }
 
-    # ---------- SINGLE STOCK ----------
+    # ---------- SINGLE ----------
     def analyze_single_stock(self, ticker):
         return self.analyze(ticker)
 
-    # ---------- SCAN MARKET ----------
+    # ---------- SCAN ----------
     def scan_market(self, limit=20):
 
         results = []
@@ -150,6 +147,15 @@ class VectorMarketScanner:
 
             if result:
                 results.append(result)
+
+        # 🔥 FALLBACK (hvis random feiler)
+        if len(results) == 0:
+            for ticker in self.base_tickers:
+                result = self.analyze(ticker)
+                if result:
+                    results.append(result)
+                    if len(results) >= limit:
+                        break
 
         # 🔥 SORT BEST FIRST
         results = sorted(
