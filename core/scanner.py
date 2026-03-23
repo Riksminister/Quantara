@@ -5,31 +5,44 @@ class VectorMarketScanner:
 
     def __init__(self):
 
-        # 🔥 KVALITETS TICKERS
+        # 🔥 KVALITETS AKSJER (kun stocks – ingen krypto)
         self.base_tickers = [
+            # Tech
             "AAPL","MSFT","NVDA","AMD","TSLA","GOOGL","META","AMZN","NFLX",
             "INTC","PLTR","SNOW","CRM","ORCL","ADBE",
+
+            # Finance
             "JPM","BAC","GS","MS","V","MA","PYPL","AXP",
+
+            # Healthcare
             "JNJ","PFE","MRNA","ABBV","LLY","UNH",
+
+            # Consumer
             "WMT","COST","NKE","SBUX","MCD","KO","PEP",
+
+            # Energy
             "XOM","CVX","SLB","OXY",
+
+            # Growth / popular
             "COIN","RBLX","SOFI","UPST","RIOT","MARA",
-            "SPY","QQQ","DIA","IWM",
-            "BTC-USD","ETH-USD","SOL-USD"
+
+            # ETFs (kan beholde disse)
+            "SPY","QQQ","DIA","IWM"
         ]
 
-        # 🔁 FYLL OPP LISTA (~300)
+        # 🔁 FYLL OPP TIL ~500 (realistisk univers)
         self.tickers = self.base_tickers.copy()
-        for _ in range(250):
+
+        while len(self.tickers) < 500:
             self.tickers.append(random.choice(self.base_tickers))
 
-    # ---------- PRICE ENGINE (KRITISK) ----------
+    # ---------- PRICE ENGINE ----------
     def get_price(self, ticker):
 
         try:
             ticker_obj = yf.Ticker(ticker)
 
-            # 1. FAST INFO (best case)
+            # 1. FAST INFO
             try:
                 price = ticker_obj.fast_info.get("lastPrice", None)
                 if price and price > 0:
@@ -45,25 +58,21 @@ class VectorMarketScanner:
             except:
                 pass
 
-            # 3. INTRADAY (mest reliable fallback)
+            # 3. INTRADAY (BEST FALLBACK)
             try:
                 df = ticker_obj.history(period="1d", interval="1m")
-
                 if not df.empty:
                     price = float(df["Close"].dropna().iloc[-1])
-                    if price > 0:
-                        return round(price, 2)
+                    return round(price, 2)
             except:
                 pass
 
-            # 4. DAILY (kun siste fallback)
+            # 4. DAILY
             try:
                 df = ticker_obj.history(period="5d", interval="1d")
-
                 if not df.empty:
                     price = float(df["Close"].dropna().iloc[-1])
-                    if price > 0:
-                        return round(price, 2)
+                    return round(price, 2)
             except:
                 pass
 
@@ -77,7 +86,7 @@ class VectorMarketScanner:
 
         price = self.get_price(ticker)
 
-        # ❌ DROPP ALT SOM IKKE ER VALID
+        # ❌ dropp dårlige data
         if not price or price < 3:
             return None
 
@@ -113,6 +122,7 @@ class VectorMarketScanner:
             if len(results) >= limit:
                 break
 
+        # 🔥 sorter best først
         results = sorted(results, key=lambda x: x["expected_move"], reverse=True)
 
         return results
@@ -138,4 +148,4 @@ class VectorMarketScanner:
 
     # ---------- TRENDING ----------
     def get_trending(self):
-        return ["TSLA", "NVDA", "AAPL", "BTC-USD", "AMD"]
+        return ["TSLA", "NVDA", "AAPL", "AMD", "META"]
