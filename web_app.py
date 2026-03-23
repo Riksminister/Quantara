@@ -55,7 +55,7 @@ with col1:
 - 🎯 Entry, stop loss, take profit  
 - ⏱️ Expected hold time  
 - 🔍 Search any stock instantly  
-    """)
+""")
 
 with col2:
     st.markdown("""
@@ -63,7 +63,7 @@ with col2:
 - 📉 RSI + MACD indicators  
 - ⚡ Fast market scanning  
 - 🔒 Premium insights (Pro)  
-    """)
+""")
 
 st.divider()
 
@@ -151,8 +151,7 @@ def create_chart(ticker, signal):
         y=df["Close"],
         name="Price",
         mode="lines",
-        line=dict(width=3, color="#00bfff"),
-        yaxis="y"
+        line=dict(width=3, color="#00bfff")
     ))
 
     last_x = df["Date"].iloc[-1]
@@ -166,8 +165,7 @@ def create_chart(ticker, signal):
         mode="markers+text",
         text=[signal],
         textposition="top center",
-        marker=dict(size=14, color=color),
-        name="Signal"
+        marker=dict(size=14, color=color)
     ))
 
     fig.add_trace(go.Scatter(
@@ -204,56 +202,57 @@ def create_chart(ticker, signal):
 
     return fig
 
-# ---------- BUTTON ROW ----------
-col1, col2 = st.columns(2)
+# ---------- SEARCH (FIXED) ----------
+st.markdown("## 🔍 Search stock")
 
-scan_clicked = col1.button("🚀 Scan Market")
-search_clicked = col2.button("🔍 Search Stock")
+col1, col2 = st.columns([4, 1])
 
-# ---------- SEARCH ----------
-if search_clicked:
+ticker_input = col1.text_input(
+    "Enter ticker (e.g. TSLA, AAPL)",
+    key="search_input"
+)
 
-    ticker_input = st.text_input("Enter ticker (e.g. TSLA, AAPL)").upper()
+search_run = col2.button("ENTER")
 
-    if st.button("Run Analysis"):
+if search_run:
 
-        if not ticker_input:
-            st.warning("Enter a ticker")
+    if not ticker_input:
+        st.warning("Enter a ticker")
 
-        elif not st.session_state.pro and st.session_state.scan_count >= 3:
-            st.error("🚫 Free limit reached")
+    elif not st.session_state.pro and st.session_state.scan_count >= 3:
+        st.error("🚫 Free limit reached")
 
-        else:
-            with st.spinner(f"Analyzing {ticker_input}..."):
+    else:
+        with st.spinner(f"Analyzing {ticker_input.upper()}..."):
 
-                result = scanner.analyze_single_stock(ticker_input)
-                st.session_state.scan_count += 1
+            result = scanner.analyze_single_stock(ticker_input.upper())
+            st.session_state.scan_count += 1
 
-                st.markdown(f"""
-                ### 📊 {result['ticker']}
+            st.markdown(f"""
+            ### 📊 {result['ticker']}
 
-                **🧠 AI Signal:** {result['signal']}  
-                **📊 AI Confidence:** {result['confidence']}%  
-                **📈 Expected Move:** {result['expected_move']}%  
-                **⚠️ Risk Level:** {result['risk']}
-                """)
+            **🧠 AI Signal:** {result['signal']}  
+            **📊 AI Confidence:** {result['confidence']}%  
+            **📈 Expected Move:** {result['expected_move']}%  
+            **⚠️ Risk Level:** {result['risk']}
+            """)
 
-                fig = create_chart(result["ticker"], result["signal"])
-                st.plotly_chart(fig, use_container_width=True)
+            fig = create_chart(result["ticker"], result["signal"])
+            st.plotly_chart(fig, use_container_width=True)
 
-                st.markdown(f"""
-                ### 📈 Trade Plan
+            st.markdown(f"""
+            ### 📈 Trade Plan
 
-                **Entry Price:** ${result['entry']}  
-                **Stop Loss:** ${result['stop_loss']}  
-                **Take Profit:** ${result['take_profit']}  
+            **Entry Price:** ${result['entry']}  
+            **Stop Loss:** ${result['stop_loss']}  
+            **Take Profit:** ${result['take_profit']}  
 
-                ### ⏱️ Expected Hold  
-                {get_timeframe(result)}
-                """)
+            ### ⏱️ Expected Hold  
+            {get_timeframe(result)}
+            """)
 
 # ---------- SCAN ----------
-if scan_clicked:
+if st.button("🚀 Scan Market Now"):
 
     if not st.session_state.pro and st.session_state.scan_count >= 3:
         st.error("🚫 Free limit reached")
