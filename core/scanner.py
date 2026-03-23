@@ -1,167 +1,182 @@
-import yfinance as yf
+import streamlit as st
+import time
+import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
-import random
+import yfinance as yf
+from datetime import datetime, timedelta
+from core.scanner import VectorMarketScanner
+import re
 
-class VectorMarketScanner:
+st.set_page_config(layout="wide", page_title="Analyrix")
 
-    def __init__(self):
+# ---------- LOGIN ----------
+if "user_email" not in st.session_state:
+    st.session_state.user_email = None
 
-        # 🔥 BASE (REAL STOCKS)
-        self.base_tickers = [
-            "AAPL","MSFT","NVDA","AMZN","GOOGL","META","TSLA","AMD","NFLX","INTC",
-            "BABA","PLTR","COIN","SHOP","SQ","UBER","DIS","PYPL","CRM","ORCL",
-            "JPM","BAC","GS","WMT","COST","KO","PEP","MCD","NKE","XOM",
-            "CVX","BA","GE","F","GM","RIVN","LCID","SNAP","PINS","ZM",
-            "ROKU","DOCU","AI","IONQ","SOFI","HOOD","DKNG","AFRM","UPST","PATH"
-        ]
+if not st.session_state.user_email:
 
-        # 🔥 BUILD TO ~800
-        self.tickers = self.base_tickers.copy()
-        alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    st.markdown("""
+# 🚀 Analyrix
 
-        while len(self.tickers) < 800:
-            ticker = "".join(random.choices(alphabet, k=3))
-            if ticker not in self.tickers:
-                self.tickers.append(ticker)
+### Find high-probability trades in seconds using AI
 
-    # ---------- DATA ----------
-    def get_data(self, ticker):
-        try:
-            df = yf.download(ticker, period="6mo", interval="1d")
+Scan hundreds of stocks or analyze any stock instantly.
+""")
 
-            if df is None or df.empty:
-                return None
+    col1, col2, col3 = st.columns(3)
+    col1.metric("📊 Stocks Scanned", "800+")
+    col2.metric("⚡ Scan Time", "Few seconds")
+    col3.metric("🎯 Accuracy", "AI-driven")
 
-            if isinstance(df.columns, pd.MultiIndex):
-                df.columns = df.columns.get_level_values(0)
+    st.divider()
 
-            df = df.reset_index()
+    st.markdown("## 🔥 What you get")
 
-            df["Close"] = pd.to_numeric(df["Close"], errors="coerce")
-            df = df.dropna()
+    col1, col2 = st.columns(2)
 
-            if len(df) < 50:
-                return None
+    with col1:
+        st.markdown("""
+- 🧠 AI trade signals  
+- 📈 Expected move prediction  
+- 🎯 Entry, stop loss, take profit  
+- ⏱️ Expected hold time  
+- 🔍 Search any stock instantly  
+""")
 
-            return df
+    with col2:
+        st.markdown("""
+- 📊 Smart charts  
+- 📉 RSI + MACD indicators  
+- ⚡ Fast market scanning  
+- 🔒 Premium insights (Pro)  
+""")
 
-        except:
-            return None
+    st.divider()
 
-    # ---------- INDICATORS ----------
-    def calculate_indicators(self, df):
+    st.markdown("## 🔐 Get started")
 
-        delta = df["Close"].diff()
+    email_input = st.text_input("Enter your email")
 
-        gain = delta.clip(lower=0)
-        loss = -delta.clip(upper=0)
-
-        avg_gain = gain.rolling(14).mean()
-        avg_loss = loss.rolling(14).mean()
-
-        rs = avg_gain / avg_loss
-        df["RSI"] = 100 - (100 / (1 + rs))
-
-        ema12 = df["Close"].ewm(span=12).mean()
-        ema26 = df["Close"].ewm(span=26).mean()
-
-        df["MACD"] = ema12 - ema26
-        df["Signal"] = df["MACD"].ewm(span=9).mean()
-
-        df = df.fillna(method="bfill").fillna(method="ffill")
-
-        return df
-
-    # ---------- ANALYZE ----------
-    def analyze(self, ticker):
-
-        df = self.get_data(ticker)
-
-        if df is None:
-            return None
-
-        df = self.calculate_indicators(df)
-
-        last = df.iloc[-1]
-
-        rsi = last["RSI"]
-        macd = last["MACD"]
-        signal = last["Signal"]
-        price = last["Close"]
-
-        # 🔥 SIGNAL
-        if rsi < 35 and macd > signal:
-            trade_signal = "BUY"
-        elif rsi > 65 and macd < signal:
-            trade_signal = "SELL"
+    if st.button("Continue"):
+        if email_input:
+            st.session_state.user_email = email_input.lower()
+            st.rerun()
         else:
-            trade_signal = "HOLD"
+            st.warning("Enter email")
 
-        # 🔥 CONFIDENCE
-        confidence = round(
-            min(95, max(60, abs(macd - signal) * 100)),
-            2
-        )
+    st.stop()
 
-        # 🔥 EXPECTED MOVE
-        volatility = df["Close"].pct_change().std() * 100
-        expected_move = round(volatility * random.uniform(1.5, 2.5), 2)
+email = st.session_state.user_email
+name = re.sub(r'\d+', '', email.split("@")[0].split(".")[0]).capitalize()
+st.success(f"Welcome to Analyrix, {name}")
 
-        # 🔥 RISK
-        if rsi < 30 or rsi > 70:
-            risk = "High"
-        elif 40 < rsi < 60:
-            risk = "Low"
+# ---------- PRO ----------
+PRO_USERS = ["sondreriksaasen@gmail.com"]
+
+def is_pro_user(email):
+    return email.lower() in [e.lower() for e in PRO_USERS]
+
+is_pro = is_pro_user(email)
+
+# ---------- DATABASE ----------
+if "users_db" not in st.session_state:
+    st.session_state.users_db = {}
+
+if email not in st.session_state.users_db:
+    st.session_state.users_db[email] = {
+        "scan_count": 0,
+        "search_count": 0,
+        "last_reset": datetime.now()
+    }
+
+user = st.session_state.users_db[email]
+
+if datetime.now() - user["last_reset"] > timedelta(hours=24):
+    user["scan_count"] = 0
+    user["search_count"] = 0
+    user["last_reset"] = datetime.now()
+
+# ---------- STATE ----------
+if "results" not in st.session_state:
+    st.session_state.results = []
+
+if "show_search" not in st.session_state:
+    st.session_state.show_search = False
+
+if "last_search" not in st.session_state:
+    st.session_state.last_search = None
+
+# ---------- HEADER ----------
+st.markdown("# 🚀 Analyrix")
+st.info("🔓 Start free – upgrade anytime")
+
+col1, col2 = st.columns(2)
+
+# ---------- SCAN ----------
+if col1.button("🚀 Scan Market"):
+
+    st.session_state.show_search = False
+
+    if not is_pro and user["scan_count"] >= 3:
+        st.error("🚫 Scan limit reached")
+    else:
+        with st.spinner("Scanning 800+ stocks using AI..."):
+            st.session_state.results = VectorMarketScanner().scan_market(limit=20)
+            user["scan_count"] += 1
+
+# ---------- SEARCH ----------
+if col2.button("🔍 Search Stock"):
+    st.session_state.show_search = True
+    st.session_state.results = []
+
+# ---------- SEARCH INPUT ----------
+if st.session_state.show_search:
+
+    ticker_input = st.text_input("Enter ticker and press ENTER")
+
+    if ticker_input and ticker_input != st.session_state.last_search:
+
+        if not is_pro and user["search_count"] >= 3:
+            st.error("🚫 Search limit reached")
         else:
-            risk = "Medium"
+            with st.spinner(f"Analyzing {ticker_input.upper()}..."):
 
-        return {
-            "ticker": ticker,
-            "signal": trade_signal,
-            "confidence": confidence,
-            "expected_move": expected_move,
-            "risk": risk,
-            "entry": round(price, 2),
-            "stop_loss": round(price * 0.95, 2),
-            "take_profit": round(price * (1 + expected_move / 100), 2)
-        }
+                result = VectorMarketScanner().analyze_single_stock(ticker_input.upper())
+                st.session_state.last_search = ticker_input
+                user["search_count"] += 1
 
-    # ---------- SINGLE ----------
-    def analyze_single_stock(self, ticker):
-        return self.analyze(ticker)
-
-    # ---------- SCAN ----------
-    def scan_market(self, limit=20):
-
-        results = []
-
-        random.shuffle(self.tickers)
-
-        for ticker in self.tickers:
-
-            if len(results) >= limit:
-                break
-
-            result = self.analyze(ticker)
-
-            if result:
-                results.append(result)
-
-        # 🔥 FALLBACK (hvis random feiler)
-        if len(results) == 0:
-            for ticker in self.base_tickers:
-                result = self.analyze(ticker)
                 if result:
-                    results.append(result)
-                    if len(results) >= limit:
-                        break
+                    st.markdown(f"""
+                    ### 📊 {result['ticker']}
 
-        # 🔥 SORT BEST FIRST
-        results = sorted(
-            results,
-            key=lambda x: x["confidence"],
-            reverse=True
-        )
+                    **🧠 AI Signal:** {result['signal']}  
+                    **📊 AI Confidence:** {result['confidence']}%  
+                    **📈 Expected Move:** {result['expected_move']}%  
+                    **⚠️ Risk Level:** {result['risk']}
+                    """)
 
-        return results
+# ---------- DISPLAY RESULTS (🔥 FIX) ----------
+if st.session_state.results:
+
+    for i, r in enumerate(st.session_state.results):
+
+        st.markdown(f"""
+        ### 📊 {r['ticker']}
+
+        **🧠 AI Signal:** {r['signal']}  
+        **📊 AI Confidence:** {r['confidence']}%  
+        **📈 Expected Move:** {r['expected_move']}%  
+        **⚠️ Risk Level:** {r['risk']}
+        """)
+
+        if st.button(f"📊 View Chart - {r['ticker']}", key=i):
+
+            df = yf.download(r["ticker"], period="6mo", interval="1d")
+
+            if not df.empty:
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(x=df.index, y=df["Close"], mode="lines"))
+                st.plotly_chart(fig, use_container_width=True)
+
+        st.divider()
