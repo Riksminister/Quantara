@@ -244,8 +244,13 @@ if col1.button("🚀 Scan Market"):
         st.error("🚫 Scan limit reached")
     else:
         with st.spinner("Scanning 800+ stocks using AI..."):
-            st.session_state.results = scanner.scan_market(limit=20)
-            user["scan_count"] += 1
+            results = scanner.scan_market(limit=20)
+
+            if not results:
+                st.error("⚠️ No results found (data issue)")
+            else:
+                st.session_state.results = results
+                user["scan_count"] += 1
 
 if col2.button("🔍 Search Stock"):
     st.session_state.show_search = True
@@ -264,28 +269,42 @@ if st.session_state.show_search:
             with st.spinner(f"Analyzing {ticker_input.upper()}..."):
 
                 result = scanner.analyze_single_stock(ticker_input.upper())
-                st.session_state.last_search = ticker_input
-                user["search_count"] += 1
 
-                st.markdown(f"""
-                ### 📊 {result['ticker']}
+                if not result:
+                    st.error("⚠️ Could not fetch stock")
+                else:
+                    st.session_state.last_search = ticker_input
+                    user["search_count"] += 1
 
-                **🧠 AI Signal:** {result['signal']}  
-                **📊 AI Confidence:** {result['confidence']}%  
-                **📈 Expected Move:** {result['expected_move']}%  
-                **⚠️ Risk Level:** {result['risk']}
-                """)
+                    st.markdown(f"""
+                    ### 📊 {result['ticker']}
 
-                fig = create_chart(result["ticker"], result["signal"])
-                st.plotly_chart(fig, use_container_width=True)
+                    **🧠 AI Signal:** {result['signal']}  
+                    **📊 AI Confidence:** {result['confidence']}%  
+                    **📈 Expected Move:** {result['expected_move']}%  
+                    **⚠️ Risk Level:** {result['risk']}
+                    """)
 
-                st.markdown(f"""
-                ### 📈 Trade Plan
+                    fig = create_chart(result["ticker"], result["signal"])
+                    st.plotly_chart(fig, use_container_width=True)
 
-                **Entry Price:** ${result['entry']}  
-                **Stop Loss:** ${result['stop_loss']}  
-                **Take Profit:** ${result['take_profit']}  
+# ---------- DISPLAY ----------
+if st.session_state.results:
 
-                ### ⏱️ Expected Hold  
-                {get_timeframe(result)}
-                """)
+    for i, r in enumerate(st.session_state.results):
+
+        st.markdown(f"""
+        ### 📊 {r['ticker']}
+
+        **🧠 AI Signal:** {r['signal']}  
+        **📊 AI Confidence:** {r['confidence']}%  
+        **📈 Expected Move:** {r['expected_move']}%  
+        **⚠️ Risk Level:** {r['risk']}
+        """)
+
+        if st.button(f"📊 View Chart - {r['ticker']}", key=f"chart_{i}"):
+
+            fig = create_chart(r["ticker"], r["signal"])
+            st.plotly_chart(fig, use_container_width=True)
+
+        st.divider()
