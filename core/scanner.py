@@ -1,142 +1,161 @@
-import random
 import yfinance as yf
+import pandas as pd
+import numpy as np
+import random
 
 class VectorMarketScanner:
 
     def __init__(self):
 
-        # 🔥 KUN AKSJER (ingen krypto)
+        # 🔥 BASE LIST (store + liquid stocks)
         self.base_tickers = [
-            "AAPL","MSFT","NVDA","AMD","TSLA","GOOGL","META","AMZN","NFLX",
-            "INTC","PLTR","SNOW","CRM","ORCL","ADBE",
-            "JPM","BAC","GS","MS","V","MA","PYPL","AXP",
-            "JNJ","PFE","MRNA","ABBV","LLY","UNH",
-            "WMT","COST","NKE","SBUX","MCD","KO","PEP",
-            "XOM","CVX","SLB","OXY",
-            "COIN","RBLX","SOFI","UPST","RIOT","MARA",
-            "SPY","QQQ","DIA","IWM"
+            "AAPL","MSFT","NVDA","AMZN","GOOGL","META","TSLA","AMD","NFLX","INTC",
+            "BABA","PLTR","COIN","SHOP","SQ","UBER","DIS","PYPL","CRM","ORCL",
+            "JPM","BAC","GS","WMT","COST","KO","PEP","MCD","NKE","XOM",
+            "CVX","BA","GE","F","GM","RIVN","LCID","SNAP","PINS","ZM",
+            "ROKU","DOCU","AI","IONQ","SOFI","HOOD","DKNG","AFRM","UPST","PATH"
         ]
 
-        # 🔁 FYLL OPP TIL ~500
-        self.tickers = self.base_tickers.copy()
+        # 🔥 GENERATE MORE TICKERS (US STOCK POOL)
+        alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
-        while len(self.tickers) < 500:
-            self.tickers.append(random.choice(self.base_tickers))
+        generated = set()
 
-    # ---------- PRICE ENGINE ----------
-    def get_price(self, ticker):
+        while len(generated) < 800:
+            length = random.choice([2, 3, 4])
+            ticker = "".join(random.choices(alphabet, k=length))
+            generated.add(ticker)
 
+        self.tickers = list(set(self.base_tickers + list(generated)))
+
+    # ---------- DATA ----------
+    def get_data(self, ticker):
         try:
-            ticker_obj = yf.Ticker(ticker)
+            df = yf.download(ticker, period="6mo", interval="1d")
 
-            # 1. FAST INFO
-            try:
-                price = ticker_obj.fast_info.get("lastPrice", None)
-                if price and price > 0:
-                    return round(float(price), 2)
-            except:
-                pass
+            if df is None or df.empty:
+                return None
 
-            # 2. CURRENT PRICE
-            try:
-                price = ticker_obj.info.get("currentPrice", None)
-                if price and price > 0:
-                    return round(float(price), 2)
-            except:
-                pass
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
 
-            # 3. INTRADAY (BEST)
-            try:
-                df = ticker_obj.history(period="1d", interval="1m")
-                if not df.empty:
-                    price = float(df["Close"].dropna().iloc[-1])
-                    return round(price, 2)
-            except:
-                pass
+            df = df.reset_index()
 
-            # 4. DAILY (LAST RESORT)
-            try:
-                df = ticker_obj.history(period="5d", interval="1d")
-                if not df.empty:
-                    price = float(df["Close"].dropna().iloc[-1])
-                    return round(price, 2)
-            except:
-                pass
+            df["Close"] = pd.to_numeric(df["Close"], errors="coerce")
+            df = df.dropna()
 
-            return None
+            if len(df) < 50:
+                return None
+
+            return df
 
         except:
             return None
 
-    # ---------- ANALYSIS ----------
-    def analyze_stock(self, ticker):
+    # ---------- INDICATORS ----------
+    def calculate_indicators(self, df):
 
-        price = self.get_price(ticker)
+        delta = df["Close"].diff()
 
-        if not price or price < 3:
+        gain = delta.clip(lower=0)
+        loss = -delta.clip(upper=0)
+
+        avg_gain = gain.rolling(14).mean()
+        avg_loss = loss.rolling(14).mean()
+
+        rs = avg_gain / avg_loss
+        df["RSI"] = 100 - (100 / (1 + rs))
+
+        ema12 = df["Close"].ewm(span=12).mean()
+        ema26 = df["Close"].ewm(span=26).mean()
+
+        df["MACD"] = ema12 - ema26
+        df["Signal"] = df["MACD"].ewm(span=9).mean()
+
+        df = df.fillna(method="bfill").fillna(method="ffill")
+
+        return df
+
+    # ---------- ANALYZE ----------
+    def analyze(self, ticker):
+
+        df = self.get_data(ticker)
+
+        if df is None:
             return None
 
-        # 🔥 STABIL LOGIKK (samme resultat hver gang)
-        seed = abs(hash(ticker)) % (10**6)
-        rng = random.Random(seed)
+        df = self.calculate_indicators(df)
 
-        confidence = round(rng.uniform(60, 90), 1)
-        expected_move = round(rng.uniform(2, 10), 2)
-        risk = rng.choice(["Low", "Medium", "High"])
+        last = df.iloc[-1]
 
-        signal = "BUY" if confidence > 75 else "WATCH"
+        rsi = last["RSI"]
+        macd = last["MACD"]
+        signal = last["Signal"]
+        price = last["Close"]
+
+        # 🔥 SIGNAL LOGIC
+        if rsi < 35 and macd > signal:
+            trade_signal = "BUY"
+        elif rsi > 65 and macd < signal:
+            trade_signal = "SELL"
+        else:
+            trade_signal = "HOLD"
+
+        # 🔥 CONFIDENCE
+        confidence = round(
+            min(95, max(60, abs(macd - signal) * 100)),
+            2
+        )
+
+        # 🔥 EXPECTED MOVE
+        volatility = df["Close"].pct_change().std() * 100
+        expected_move = round(volatility * random.uniform(1.5, 2.5), 2)
+
+        # 🔥 RISK
+        if rsi < 30 or rsi > 70:
+            risk = "High"
+        elif 40 < rsi < 60:
+            risk = "Low"
+        else:
+            risk = "Medium"
 
         return {
             "ticker": ticker,
-            "signal": signal,
+            "signal": trade_signal,
             "confidence": confidence,
             "expected_move": expected_move,
             "risk": risk,
-            "entry": price,
-            "stop_loss": round(price * 0.92, 2),
+            "entry": round(price, 2),
+            "stop_loss": round(price * 0.95, 2),
             "take_profit": round(price * (1 + expected_move / 100), 2)
         }
 
-    # ---------- SCAN ----------
-    def scan_market(self, limit=20):
+    # ---------- SINGLE STOCK ----------
+    def analyze_single_stock(self, ticker):
+        return self.analyze(ticker)
 
-        sample = random.sample(self.tickers, min(len(self.tickers), limit * 3))
+    # ---------- SCAN MARKET ----------
+    def scan_market(self, limit=20):
 
         results = []
 
-        for ticker in sample:
-            result = self.analyze_stock(ticker)
+        random.shuffle(self.tickers)
 
-            if result:
-                results.append(result)
+        for ticker in self.tickers:
 
             if len(results) >= limit:
                 break
 
-        # 🔥 SORTER BEST FØRST
-        results = sorted(results, key=lambda x: x["expected_move"], reverse=True)
+            result = self.analyze(ticker)
+
+            if result:
+                results.append(result)
+
+        # 🔥 SORT BEST FIRST
+        results = sorted(
+            results,
+            key=lambda x: x["confidence"],
+            reverse=True
+        )
 
         return results
-
-    # ---------- SINGLE ----------
-    def analyze_single_stock(self, ticker):
-
-        result = self.analyze_stock(ticker)
-
-        if not result:
-            return {
-                "ticker": ticker.upper(),
-                "signal": "NO DATA",
-                "confidence": 0,
-                "expected_move": 0,
-                "risk": "N/A",
-                "entry": "-",
-                "stop_loss": "-",
-                "take_profit": "-"
-            }
-
-        return result
-
-    # ---------- TRENDING ----------
-    def get_trending(self):
-        return ["TSLA", "NVDA", "AAPL", "AMD", "META"]
