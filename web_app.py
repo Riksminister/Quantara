@@ -74,9 +74,7 @@ name = re.sub(r'\d+', '', email.split("@")[0].split(".")[0]).capitalize()
 st.success(f"Welcome to Analyrix, {name}")
 
 # ---------- PRO USERS ----------
-PRO_USERS = [
-    "sondreriksaasen@gmail.com"
-]
+PRO_USERS = ["sondreriksaasen@gmail.com"]
 
 def is_pro_user(email):
     return email.lower() in [e.lower() for e in PRO_USERS]
@@ -160,78 +158,14 @@ if not is_pro:
     st.warning("Free: 3 scans + 3 searches per 24h")
     st.divider()
 
-# ---------- TIMEFRAME ----------
-def get_timeframe(trade):
-    move = trade["expected_move"]
-    if move > 8:
-        return "Short-term (1–3 days)"
-    elif move > 4:
-        return "Medium-term (3–7 days)"
+# ---------- REASONING ----------
+def generate_reasoning(signal, confidence, expected_move, risk):
+    if signal == "BUY":
+        return f"Momentum and indicators suggest bullish continuation. Confidence is {confidence}% with expected move of {expected_move}%."
+    elif signal == "SELL":
+        return f"Indicators show weakening momentum and potential downside. Confidence is {confidence}% with expected move of {expected_move}%."
     else:
-        return "Longer-term (1–2 weeks)"
-
-# ---------- DATA ----------
-def get_data(ticker):
-    try:
-        df = yf.download(ticker, period="6mo", interval="1d")
-
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-
-        df = df.reset_index()
-    except:
-        dates = pd.date_range(end=pd.Timestamp.today(), periods=120)
-        df = pd.DataFrame({
-            "Date": dates,
-            "Close": np.cumsum(np.random.randn(120)) + 100
-        })
-
-    df["Close"] = pd.Series(df["Close"]).astype(float)
-    return df
-
-# ---------- INDICATORS ----------
-def add_indicators(df):
-    delta = df["Close"].diff()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
-
-    rs = gain.rolling(14).mean() / loss.rolling(14).mean()
-    df["RSI"] = 100 - (100 / (1 + rs))
-
-    ema12 = df["Close"].ewm(span=12).mean()
-    ema26 = df["Close"].ewm(span=26).mean()
-
-    df["MACD"] = ema12 - ema26
-    df["Signal"] = df["MACD"].ewm(span=9).mean()
-
-    return df.fillna(method="bfill")
-
-# ---------- CHART ----------
-def create_chart(ticker, signal):
-    df = add_indicators(get_data(ticker))
-
-    fig = go.Figure()
-
-    fig.add_trace(go.Scatter(x=df["Date"], y=df["Close"], mode="lines"))
-
-    fig.add_trace(go.Scatter(
-        x=[df["Date"].iloc[-1]],
-        y=[df["Close"].iloc[-1]],
-        mode="markers+text",
-        text=[signal]
-    ))
-
-    fig.add_trace(go.Scatter(x=df["Date"], y=df["RSI"], yaxis="y2"))
-    fig.add_trace(go.Scatter(x=df["Date"], y=df["MACD"], yaxis="y3"))
-    fig.add_trace(go.Scatter(x=df["Date"], y=df["Signal"], yaxis="y3"))
-
-    fig.update_layout(
-        template="plotly_dark",
-        yaxis2=dict(overlaying="y", side="right"),
-        yaxis3=dict(overlaying="y", side="right", position=0.9)
-    )
-
-    return fig
+        return f"Market shows mixed signals. No strong trend detected. Risk level: {risk}."
 
 # ---------- BUTTONS ----------
 col1, col2 = st.columns(2)
@@ -247,7 +181,7 @@ if col1.button("🚀 Scan Market"):
             results = scanner.scan_market(limit=20)
 
             if not results:
-                st.error("⚠️ No results found (data issue)")
+                st.error("⚠️ No results found")
             else:
                 st.session_state.results = results
                 user["scan_count"] += 1
@@ -270,9 +204,7 @@ if st.session_state.show_search:
 
                 result = scanner.analyze_single_stock(ticker_input.upper())
 
-                if not result:
-                    st.error("⚠️ Could not fetch stock")
-                else:
+                if result:
                     st.session_state.last_search = ticker_input
                     user["search_count"] += 1
 
@@ -282,7 +214,15 @@ if st.session_state.show_search:
                     **🧠 AI Signal:** {result['signal']}  
                     **📊 AI Confidence:** {result['confidence']}%  
                     **📈 Expected Move:** {result['expected_move']}%  
-                    **⚠️ Risk Level:** {result['risk']}
+                    **⚠️ Risk Level:** {result['risk']}  
+
+                    ### 📈 Trade Plan
+                    **Entry:** ${result['entry']}  
+                    **Stop Loss:** ${result['stop_loss']}  
+                    **Take Profit:** ${result['take_profit']}  
+
+                    ### 🧠 AI Insight
+                    {generate_reasoning(result['signal'], result['confidence'], result['expected_move'], result['risk'])}
                     """)
 
                     fig = create_chart(result["ticker"], result["signal"])
@@ -299,7 +239,15 @@ if st.session_state.results:
         **🧠 AI Signal:** {r['signal']}  
         **📊 AI Confidence:** {r['confidence']}%  
         **📈 Expected Move:** {r['expected_move']}%  
-        **⚠️ Risk Level:** {r['risk']}
+        **⚠️ Risk Level:** {r['risk']}  
+
+        ### 📈 Trade Plan
+        **Entry:** ${r['entry']}  
+        **Stop Loss:** ${r['stop_loss']}  
+        **Take Profit:** ${r['take_profit']}  
+
+        ### 🧠 AI Insight
+        {generate_reasoning(r['signal'], r['confidence'], r['expected_move'], r['risk'])}
         """)
 
         if st.button(f"📊 View Chart - {r['ticker']}", key=f"chart_{i}"):
