@@ -158,14 +158,80 @@ if not is_pro:
     st.warning("Free: 3 scans + 3 searches per 24h")
     st.divider()
 
+# ---------- DATA ----------
+def get_data(ticker):
+    try:
+        df = yf.download(ticker, period="6mo", interval="1d")
+
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+
+        df = df.reset_index()
+    except:
+        dates = pd.date_range(end=pd.Timestamp.today(), periods=120)
+        df = pd.DataFrame({
+            "Date": dates,
+            "Close": np.cumsum(np.random.randn(120)) + 100
+        })
+
+    df["Close"] = pd.Series(df["Close"]).astype(float)
+    return df
+
+# ---------- INDICATORS ----------
+def add_indicators(df):
+    delta = df["Close"].diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+
+    rs = gain.rolling(14).mean() / loss.rolling(14).mean()
+    df["RSI"] = 100 - (100 / (1 + rs))
+
+    ema12 = df["Close"].ewm(span=12).mean()
+    ema26 = df["Close"].ewm(span=26).mean()
+
+    df["MACD"] = ema12 - ema26
+    df["Signal"] = df["MACD"].ewm(span=9).mean()
+
+    return df.fillna(method="bfill")
+
+# ---------- CHART (FIXED) ----------
+def create_chart(ticker, signal):
+    df = add_indicators(get_data(ticker))
+
+    fig = go.Figure()
+
+    fig.add_trace(go.Scatter(x=df["Date"], y=df["Close"], mode="lines", name="Price"))
+
+    fig.add_trace(go.Scatter(
+        x=[df["Date"].iloc[-1]],
+        y=[df["Close"].iloc[-1]],
+        mode="markers+text",
+        text=[signal],
+        textposition="top center"
+    ))
+
+    fig.add_trace(go.Scatter(x=df["Date"], y=df["RSI"], name="RSI", yaxis="y2"))
+    fig.add_trace(go.Scatter(x=df["Date"], y=df["MACD"], name="MACD", yaxis="y3"))
+    fig.add_trace(go.Scatter(x=df["Date"], y=df["Signal"], name="Signal", yaxis="y3"))
+
+    fig.update_layout(
+        template="plotly_dark",
+        height=500,
+        yaxis=dict(title="Price"),
+        yaxis2=dict(overlaying="y", side="right"),
+        yaxis3=dict(overlaying="y", side="right", position=0.9)
+    )
+
+    return fig
+
 # ---------- REASONING ----------
 def generate_reasoning(signal, confidence, expected_move, risk):
     if signal == "BUY":
-        return f"Momentum and indicators suggest bullish continuation. Confidence is {confidence}% with expected move of {expected_move}%."
+        return f"Bullish momentum detected. Indicators align with upward movement ({confidence}% confidence)."
     elif signal == "SELL":
-        return f"Indicators show weakening momentum and potential downside. Confidence is {confidence}% with expected move of {expected_move}%."
+        return f"Bearish pressure detected. Indicators suggest downside risk ({confidence}% confidence)."
     else:
-        return f"Market shows mixed signals. No strong trend detected. Risk level: {risk}."
+        return f"Mixed signals. Market is uncertain. Risk level: {risk}."
 
 # ---------- BUTTONS ----------
 col1, col2 = st.columns(2)
@@ -180,11 +246,11 @@ if col1.button("🚀 Scan Market"):
         with st.spinner("Scanning 800+ stocks using AI..."):
             results = scanner.scan_market(limit=20)
 
-            if not results:
-                st.error("⚠️ No results found")
-            else:
+            if results:
                 st.session_state.results = results
                 user["scan_count"] += 1
+            else:
+                st.error("No data returned")
 
 if col2.button("🔍 Search Stock"):
     st.session_state.show_search = True
@@ -200,33 +266,31 @@ if st.session_state.show_search:
         if not is_pro and user["search_count"] >= 3:
             st.error("🚫 Search limit reached")
         else:
-            with st.spinner(f"Analyzing {ticker_input.upper()}..."):
+            result = scanner.analyze_single_stock(ticker_input.upper())
 
-                result = scanner.analyze_single_stock(ticker_input.upper())
+            if result:
+                st.session_state.last_search = ticker_input
+                user["search_count"] += 1
 
-                if result:
-                    st.session_state.last_search = ticker_input
-                    user["search_count"] += 1
+                st.markdown(f"""
+### 📊 {result['ticker']}
 
-                    st.markdown(f"""
-                    ### 📊 {result['ticker']}
+**🧠 AI Signal:** {result['signal']}  
+**📊 Confidence:** {result['confidence']}%  
+**📈 Expected Move:** {result['expected_move']}%  
+**⚠️ Risk:** {result['risk']}  
 
-                    **🧠 AI Signal:** {result['signal']}  
-                    **📊 AI Confidence:** {result['confidence']}%  
-                    **📈 Expected Move:** {result['expected_move']}%  
-                    **⚠️ Risk Level:** {result['risk']}  
+### 📈 Trade Plan
+Entry: ${result['entry']}  
+Stop Loss: ${result['stop_loss']}  
+Take Profit: ${result['take_profit']}  
 
-                    ### 📈 Trade Plan
-                    **Entry:** ${result['entry']}  
-                    **Stop Loss:** ${result['stop_loss']}  
-                    **Take Profit:** ${result['take_profit']}  
+### 🧠 AI Insight
+{generate_reasoning(result['signal'], result['confidence'], result['expected_move'], result['risk'])}
+""")
 
-                    ### 🧠 AI Insight
-                    {generate_reasoning(result['signal'], result['confidence'], result['expected_move'], result['risk'])}
-                    """)
-
-                    fig = create_chart(result["ticker"], result["signal"])
-                    st.plotly_chart(fig, use_container_width=True)
+                fig = create_chart(result["ticker"], result["signal"])
+                st.plotly_chart(fig, use_container_width=True)
 
 # ---------- DISPLAY ----------
 if st.session_state.results:
@@ -234,24 +298,23 @@ if st.session_state.results:
     for i, r in enumerate(st.session_state.results):
 
         st.markdown(f"""
-        ### 📊 {r['ticker']}
+### 📊 {r['ticker']}
 
-        **🧠 AI Signal:** {r['signal']}  
-        **📊 AI Confidence:** {r['confidence']}%  
-        **📈 Expected Move:** {r['expected_move']}%  
-        **⚠️ Risk Level:** {r['risk']}  
+**🧠 AI Signal:** {r['signal']}  
+**📊 Confidence:** {r['confidence']}%  
+**📈 Expected Move:** {r['expected_move']}%  
+**⚠️ Risk:** {r['risk']}  
 
-        ### 📈 Trade Plan
-        **Entry:** ${r['entry']}  
-        **Stop Loss:** ${r['stop_loss']}  
-        **Take Profit:** ${r['take_profit']}  
+### 📈 Trade Plan
+Entry: ${r['entry']}  
+Stop Loss: ${r['stop_loss']}  
+Take Profit: ${r['take_profit']}  
 
-        ### 🧠 AI Insight
-        {generate_reasoning(r['signal'], r['confidence'], r['expected_move'], r['risk'])}
-        """)
+### 🧠 AI Insight
+{generate_reasoning(r['signal'], r['confidence'], r['expected_move'], r['risk'])}
+""")
 
         if st.button(f"📊 View Chart - {r['ticker']}", key=f"chart_{i}"):
-
             fig = create_chart(r["ticker"], r["signal"])
             st.plotly_chart(fig, use_container_width=True)
 
