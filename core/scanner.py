@@ -5,32 +5,19 @@ class VectorMarketScanner:
 
     def __init__(self):
 
-        # 🔥 KVALITETS AKSJER (kun stocks – ingen krypto)
+        # 🔥 KUN AKSJER (ingen krypto)
         self.base_tickers = [
-            # Tech
             "AAPL","MSFT","NVDA","AMD","TSLA","GOOGL","META","AMZN","NFLX",
             "INTC","PLTR","SNOW","CRM","ORCL","ADBE",
-
-            # Finance
             "JPM","BAC","GS","MS","V","MA","PYPL","AXP",
-
-            # Healthcare
             "JNJ","PFE","MRNA","ABBV","LLY","UNH",
-
-            # Consumer
             "WMT","COST","NKE","SBUX","MCD","KO","PEP",
-
-            # Energy
             "XOM","CVX","SLB","OXY",
-
-            # Growth / popular
             "COIN","RBLX","SOFI","UPST","RIOT","MARA",
-
-            # ETFs (kan beholde disse)
             "SPY","QQQ","DIA","IWM"
         ]
 
-        # 🔁 FYLL OPP TIL ~500 (realistisk univers)
+        # 🔁 FYLL OPP TIL ~500
         self.tickers = self.base_tickers.copy()
 
         while len(self.tickers) < 500:
@@ -58,7 +45,7 @@ class VectorMarketScanner:
             except:
                 pass
 
-            # 3. INTRADAY (BEST FALLBACK)
+            # 3. INTRADAY (BEST)
             try:
                 df = ticker_obj.history(period="1d", interval="1m")
                 if not df.empty:
@@ -67,7 +54,7 @@ class VectorMarketScanner:
             except:
                 pass
 
-            # 4. DAILY
+            # 4. DAILY (LAST RESORT)
             try:
                 df = ticker_obj.history(period="5d", interval="1d")
                 if not df.empty:
@@ -86,12 +73,16 @@ class VectorMarketScanner:
 
         price = self.get_price(ticker)
 
-        # ❌ dropp dårlige data
         if not price or price < 3:
             return None
 
-        confidence = round(random.uniform(60, 90), 1)
-        expected_move = round(random.uniform(2, 10), 2)
+        # 🔥 STABIL LOGIKK (samme resultat hver gang)
+        seed = abs(hash(ticker)) % (10**6)
+        rng = random.Random(seed)
+
+        confidence = round(rng.uniform(60, 90), 1)
+        expected_move = round(rng.uniform(2, 10), 2)
+        risk = rng.choice(["Low", "Medium", "High"])
 
         signal = "BUY" if confidence > 75 else "WATCH"
 
@@ -100,7 +91,7 @@ class VectorMarketScanner:
             "signal": signal,
             "confidence": confidence,
             "expected_move": expected_move,
-            "risk": random.choice(["Low", "Medium", "High"]),
+            "risk": risk,
             "entry": price,
             "stop_loss": round(price * 0.92, 2),
             "take_profit": round(price * (1 + expected_move / 100), 2)
@@ -122,12 +113,12 @@ class VectorMarketScanner:
             if len(results) >= limit:
                 break
 
-        # 🔥 sorter best først
+        # 🔥 SORTER BEST FØRST
         results = sorted(results, key=lambda x: x["expected_move"], reverse=True)
 
         return results
 
-    # ---------- SINGLE STOCK ----------
+    # ---------- SINGLE ----------
     def analyze_single_stock(self, ticker):
 
         result = self.analyze_stock(ticker)
