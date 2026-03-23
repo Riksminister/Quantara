@@ -9,18 +9,51 @@ from core.scanner import VectorMarketScanner
 
 st.set_page_config(layout="wide", page_title="Analyrix")
 
+# ---------- USER LOGIN ----------
+st.sidebar.title("Account")
+email = st.sidebar.text_input("Enter your email")
+
+# ---------- PRO USERS ----------
+PRO_USERS = [
+    "sondreriksaasen@gmail.com"
+]
+
+def is_pro_user(email):
+    return email.lower() in [e.lower() for e in PRO_USERS]
+
+# ---------- DATABASE ----------
+if "users_db" not in st.session_state:
+    st.session_state.users_db = {}
+
+if email:
+    if email not in st.session_state.users_db:
+        st.session_state.users_db[email] = {
+            "scan_count": 0,
+            "search_count": 0,
+            "last_reset": datetime.now()
+        }
+
+    user = st.session_state.users_db[email]
+
+    # reset hver 24h
+    if datetime.now() - user["last_reset"] > timedelta(hours=24):
+        user["scan_count"] = 0
+        user["search_count"] = 0
+        user["last_reset"] = datetime.now()
+
+    is_pro = is_pro_user(email)
+
+    st.sidebar.success(f"Logged in: {email}")
+    st.sidebar.write(f"Plan: {'PRO' if is_pro else 'FREE'}")
+    st.sidebar.write(f"Scans: {user['scan_count']} / {'∞' if is_pro else 3}")
+    st.sidebar.write(f"Searches: {user['search_count']} / {'∞' if is_pro else 3}")
+else:
+    user = None
+    is_pro = False
+
 # ---------- STATE ----------
 if "results" not in st.session_state:
     st.session_state.results = []
-
-if "pro" not in st.session_state:
-    st.session_state.pro = False
-
-if "scan_count" not in st.session_state:
-    st.session_state.scan_count = 0
-
-if "last_scan_reset" not in st.session_state:
-    st.session_state.last_scan_reset = datetime.now()
 
 if "show_search" not in st.session_state:
     st.session_state.show_search = False
@@ -28,19 +61,14 @@ if "show_search" not in st.session_state:
 if "last_search" not in st.session_state:
     st.session_state.last_search = None
 
-# ---------- RESET ----------
-if datetime.now() - st.session_state.last_scan_reset > timedelta(hours=24):
-    st.session_state.scan_count = 0
-    st.session_state.last_scan_reset = datetime.now()
-
 # ---------- HERO ----------
 st.markdown("""
 # 🚀 Analyrix
 
 ### Find high-probability trades in seconds using AI
-
-Scan hundreds of stocks or analyze any stock instantly.
 """)
+
+st.info("🔓 Start free – upgrade anytime")
 
 col1, col2, col3 = st.columns(3)
 col1.metric("📊 Stocks Scanned", "400+")
@@ -76,14 +104,10 @@ st.divider()
 scanner = VectorMarketScanner()
 
 # ---------- PAYWALL ----------
-if not st.session_state.pro:
-    st.info("🔓 Upgrade to Pro for unlimited scans")
-
-    st.markdown(
-        "[🚀 Get Pro Access ($19/month)](https://buy.stripe.com/14A14n6kuaaPffCdqoak000)"
-    )
-
-    st.warning("🔒 Free: 3 scans per 24h")
+if not is_pro:
+    st.markdown("[🚀 Get Pro Access ($19/month)](https://buy.stripe.com/14A14n6kuaaPffCdqoak000)")
+    st.caption("After payment, enter your email above to unlock PRO")
+    st.warning("Free: 3 scans + 3 searches per 24h")
     st.divider()
 
 # ---------- TIMEFRAME ----------
@@ -101,9 +125,6 @@ def get_data(ticker):
     try:
         df = yf.download(ticker, period="6mo", interval="1d")
 
-        if df is None or df.empty:
-            raise Exception("No data")
-
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
 
@@ -111,11 +132,9 @@ def get_data(ticker):
 
     except:
         dates = pd.date_range(end=pd.Timestamp.today(), periods=120)
-        price = np.cumsum(np.random.randn(120)) + 100
-
         df = pd.DataFrame({
             "Date": dates,
-            "Close": price
+            "Close": np.cumsum(np.random.randn(120)) + 100
         })
 
     df["Close"] = pd.Series(df["Close"]).astype(float)
@@ -127,10 +146,7 @@ def add_indicators(df):
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
 
-    avg_gain = gain.rolling(14).mean()
-    avg_loss = loss.rolling(14).mean()
-
-    rs = avg_gain / avg_loss
+    rs = gain.rolling(14).mean() / loss.rolling(14).mean()
     df["RSI"] = 100 - (100 / (1 + rs))
 
     ema12 = df["Close"].ewm(span=12).mean()
@@ -139,8 +155,7 @@ def add_indicators(df):
     df["MACD"] = ema12 - ema26
     df["Signal"] = df["MACD"].ewm(span=9).mean()
 
-    df = df.fillna(method="bfill").fillna(method="ffill")
-    return df
+    return df.fillna(method="bfill")
 
 # ---------- CHART ----------
 def create_chart(ticker, signal):
@@ -148,49 +163,23 @@ def create_chart(ticker, signal):
 
     fig = go.Figure()
 
-    fig.add_trace(go.Scatter(
-        x=df["Date"],
-        y=df["Close"],
-        mode="lines",
-        name="Price",
-        line=dict(width=3, color="#00bfff")
-    ))
+    fig.add_trace(go.Scatter(x=df["Date"], y=df["Close"], mode="lines", name="Price"))
 
     fig.add_trace(go.Scatter(
         x=[df["Date"].iloc[-1]],
         y=[df["Close"].iloc[-1]],
         mode="markers+text",
-        text=[signal],
-        textposition="top center"
+        text=[signal]
     ))
 
-    fig.add_trace(go.Scatter(
-        x=df["Date"],
-        y=df["RSI"],
-        name="RSI",
-        yaxis="y2"
-    ))
-
-    fig.add_trace(go.Scatter(
-        x=df["Date"],
-        y=df["MACD"],
-        name="MACD",
-        yaxis="y3"
-    ))
-
-    fig.add_trace(go.Scatter(
-        x=df["Date"],
-        y=df["Signal"],
-        name="Signal",
-        yaxis="y3"
-    ))
+    fig.add_trace(go.Scatter(x=df["Date"], y=df["RSI"], yaxis="y2"))
+    fig.add_trace(go.Scatter(x=df["Date"], y=df["MACD"], yaxis="y3"))
+    fig.add_trace(go.Scatter(x=df["Date"], y=df["Signal"], yaxis="y3"))
 
     fig.update_layout(
         template="plotly_dark",
-        height=500,
-        yaxis=dict(title="Price"),
-        yaxis2=dict(overlaying="y", side="right", position=0.95),
-        yaxis3=dict(overlaying="y", side="right", position=0.85)
+        yaxis2=dict(overlaying="y", side="right"),
+        yaxis3=dict(overlaying="y", side="right", position=0.9)
     )
 
     return fig
@@ -199,39 +188,43 @@ def create_chart(ticker, signal):
 col1, col2 = st.columns(2)
 
 if col1.button("🚀 Scan Market"):
+
     st.session_state.show_search = False
 
-    if not st.session_state.pro and st.session_state.scan_count >= 3:
-        st.error("🚫 Free limit reached")
+    if not email:
+        st.error("Enter email first")
+
+    elif not is_pro and user["scan_count"] >= 3:
+        st.error("🚫 Scan limit reached")
+
     else:
         with st.spinner("Scanning..."):
-            time.sleep(1.5)
             st.session_state.results = scanner.scan_market(limit=20)
-            st.session_state.scan_count += 1
+            user["scan_count"] += 1
 
 if col2.button("🔍 Search Stock"):
     st.session_state.show_search = True
     st.session_state.results = []
 
-# ---------- SEARCH INPUT ----------
+# ---------- SEARCH ----------
 if st.session_state.show_search:
 
-    ticker_input = st.text_input(
-        "Enter ticker and press ENTER",
-        key="search_box"
-    )
+    ticker_input = st.text_input("Enter ticker and press ENTER")
 
-    # 🔥 ENTER trigger
     if ticker_input and ticker_input != st.session_state.last_search:
 
-        if not st.session_state.pro and st.session_state.scan_count >= 3:
-            st.error("🚫 Free limit reached")
+        if not email:
+            st.error("Enter email first")
+
+        elif not is_pro and user["search_count"] >= 3:
+            st.error("🚫 Search limit reached")
+
         else:
             with st.spinner(f"Analyzing {ticker_input.upper()}..."):
 
                 result = scanner.analyze_single_stock(ticker_input.upper())
                 st.session_state.last_search = ticker_input
-                st.session_state.scan_count += 1
+                user["search_count"] += 1
 
                 st.markdown(f"""
                 ### 📊 {result['ticker']}
