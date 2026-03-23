@@ -10,11 +10,10 @@ import re
 
 st.set_page_config(layout="wide", page_title="Analyrix")
 
-# ---------- LOGIN STATE ----------
+# ---------- LOGIN ----------
 if "user_email" not in st.session_state:
     st.session_state.user_email = None
 
-# ---------- LANDING + LOGIN ----------
 if not st.session_state.user_email:
 
     st.markdown("""
@@ -55,8 +54,6 @@ Scan hundreds of stocks or analyze any stock instantly.
 
     st.divider()
 
-    st.markdown("## 🔐 Get started")
-
     email_input = st.text_input("Enter your email")
 
     if st.button("Continue"):
@@ -73,15 +70,15 @@ email = st.session_state.user_email
 name = re.sub(r'\d+', '', email.split("@")[0].split(".")[0]).capitalize()
 st.success(f"Welcome to Analyrix, {name}")
 
-# ---------- PRO USERS ----------
+# ---------- PRO ----------
 PRO_USERS = ["sondreriksaasen@gmail.com"]
 
 def is_pro_user(email):
-    return email.lower() in [e.lower() for e in PRO_USERS]
+    return email.lower() in PRO_USERS
 
 is_pro = is_pro_user(email)
 
-# ---------- DATABASE ----------
+# ---------- USER DB ----------
 if "users_db" not in st.session_state:
     st.session_state.users_db = {}
 
@@ -109,86 +106,45 @@ if "show_search" not in st.session_state:
 if "last_search" not in st.session_state:
     st.session_state.last_search = None
 
-# ---------- HERO ----------
-st.markdown("""
-# 🚀 Analyrix
-
-### Find high-probability trades in seconds using AI
-""")
-
+# ---------- HEADER ----------
+st.markdown("# 🚀 Analyrix")
 st.info("🔓 Start free – upgrade anytime")
 
-col1, col2, col3 = st.columns(3)
-col1.metric("📊 Stocks Scanned", "800+")
-col2.metric("⚡ Scan Time", "Few seconds")
-col3.metric("🎯 Accuracy", "AI-driven")
-
-st.divider()
-
-# ---------- FEATURES ----------
-st.markdown("## 🔥 What you get")
-
 col1, col2 = st.columns(2)
-
-with col1:
-    st.markdown("""
-- 🧠 AI trade signals  
-- 📈 Expected move prediction  
-- 🎯 Entry, stop loss, take profit  
-- ⏱️ Expected hold time  
-- 🔍 Search any stock instantly  
-""")
-
-with col2:
-    st.markdown("""
-- 📊 Smart charts  
-- 📉 RSI + MACD indicators  
-- ⚡ Fast market scanning  
-- 🔒 Premium insights (Pro)  
-""")
-
-st.divider()
 
 scanner = VectorMarketScanner()
 
 # ---------- PAYWALL ----------
 if not is_pro:
     st.markdown("[🚀 Get Pro Access ($19/month)](https://buy.stripe.com/14A14n6kuaaPffCdqoak000)")
-    st.caption("After payment, enter your email above to unlock PRO")
-    st.warning("Free: 3 scans + 3 searches per 24h")
-    st.divider()
+    st.warning("Free: 3 scans + 3 searches per day")
+
+# ---------- REASON ----------
+def generate_reasoning(signal, confidence, expected_move, risk):
+    if signal == "BUY":
+        return f"Bullish momentum detected with {confidence}% confidence."
+    elif signal == "SELL":
+        return f"Bearish pressure detected with {confidence}% confidence."
+    return f"Mixed signals. Risk level: {risk}."
 
 # ---------- DATA ----------
 def get_data(ticker):
-    df = yf.download(ticker, period="6mo", interval="1d")
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
+    df = yf.download(ticker, period="3mo", progress=False)
     df = df.reset_index()
     return df
 
 # ---------- INDICATORS ----------
 def add_indicators(df):
-    delta = df["Close"].diff()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
-
-    rs = gain.rolling(14).mean() / loss.rolling(14).mean()
-    df["RSI"] = 100 - (100 / (1 + rs))
-
-    ema12 = df["Close"].ewm(span=12).mean()
-    ema26 = df["Close"].ewm(span=26).mean()
-
-    df["MACD"] = ema12 - ema26
-    df["Signal"] = df["MACD"].ewm(span=9).mean()
-
-    return df.fillna(method="bfill")
+    df["RSI"] = 50
+    df["MACD"] = 0
+    df["Signal"] = 0
+    return df
 
 # ---------- CHART ----------
 def create_chart(ticker, signal):
-    df = add_indicators(get_data(ticker))
+    df = get_data(ticker)
 
     fig = go.Figure()
-
     fig.add_trace(go.Scatter(x=df["Date"], y=df["Close"], mode="lines"))
 
     fig.add_trace(go.Scatter(
@@ -198,38 +154,18 @@ def create_chart(ticker, signal):
         text=[signal]
     ))
 
-    fig.add_trace(go.Scatter(x=df["Date"], y=df["RSI"], yaxis="y2"))
-    fig.add_trace(go.Scatter(x=df["Date"], y=df["MACD"], yaxis="y3"))
-    fig.add_trace(go.Scatter(x=df["Date"], y=df["Signal"], yaxis="y3"))
-
-    fig.update_layout(
-        template="plotly_dark",
-        yaxis2=dict(overlaying="y", side="right"),
-        yaxis3=dict(overlaying="y", side="right", position=0.9)
-    )
-
     return fig
 
-# ---------- REASON ----------
-def generate_reasoning(signal, confidence, expected_move, risk):
-    if signal == "BUY":
-        return f"Bullish momentum with {confidence}% confidence and expected move of {expected_move}%."
-    elif signal == "SELL":
-        return f"Bearish trend detected with {confidence}% confidence."
-    return "Market is neutral."
-
 # ---------- BUTTONS ----------
-col1, col2 = st.columns(2)
-
 if col1.button("🚀 Scan Market"):
     st.session_state.show_search = False
 
     if not is_pro and user["scan_count"] >= 3:
-        st.error("🚫 Scan limit reached")
+        st.error("Limit reached")
     else:
-        with st.spinner("Scanning 800+ stocks using AI..."):
-            st.session_state.results = scanner.scan_market(limit=20)
-            user["scan_count"] += 1
+        results = scanner.scan_market(limit=20)
+        st.session_state.results = results
+        user["scan_count"] += 1
 
 if col2.button("🔍 Search Stock"):
     st.session_state.show_search = True
@@ -237,10 +173,10 @@ if col2.button("🔍 Search Stock"):
 
 # ---------- SEARCH ----------
 if st.session_state.show_search:
-    ticker_input = st.text_input("Enter ticker")
+    ticker = st.text_input("Enter ticker")
 
-    if ticker_input:
-        result = scanner.analyze_single_stock(ticker_input.upper())
+    if ticker:
+        result = scanner.analyze_single_stock(ticker.upper())
 
         if result:
             st.markdown(f"## {result['ticker']}")
@@ -254,7 +190,12 @@ Stop Loss: ${result['stop_loss']}
 Take Profit: ${result['take_profit']}
 """)
 
-            st.markdown(generate_reasoning(**result))
+            st.markdown(generate_reasoning(
+                result["signal"],
+                result["confidence"],
+                result["expected_move"],
+                result["risk"]
+            ))
 
             st.plotly_chart(create_chart(result["ticker"], result["signal"]))
 
@@ -268,18 +209,12 @@ if st.session_state.results:
     for t in top:
         st.markdown(f"**{t['ticker']}** — {t['signal']} ({t['confidence']}%)")
 
-    st.divider()
-
 # ---------- DISPLAY ----------
 if st.session_state.results:
 
     for i, r in enumerate(st.session_state.results):
 
-        # 🔥 Strong signal
-        if r["confidence"] > 85:
-            label = f"🔥 STRONG {r['signal']}"
-        else:
-            label = r["signal"]
+        label = f"🔥 STRONG {r['signal']}" if r["confidence"] > 85 else r["signal"]
 
         st.markdown(f"""
 ### 📊 {r['ticker']}
@@ -298,7 +233,12 @@ Stop Loss: ${r['stop_loss']}
 Take Profit: ${r['take_profit']}
 """)
 
-        st.markdown(generate_reasoning(**r))
+        st.markdown(generate_reasoning(
+            r["signal"],
+            r["confidence"],
+            r["expected_move"],
+            r["risk"]
+        ))
 
         if st.button(f"Chart {r['ticker']}", key=i):
             st.plotly_chart(create_chart(r["ticker"], r["signal"]))
