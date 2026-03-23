@@ -7,28 +7,41 @@ class VectorMarketScanner:
 
     def __init__(self):
 
-        # 🔥 BASE (ekte aksjer)
-        self.base_tickers = [
+        # 🔥 STOR LISTE MED EKTE AKSJER (800+ vibe, men stabile)
+        self.tickers = [
             "AAPL","MSFT","NVDA","AMZN","GOOGL","META","TSLA","AMD","NFLX","INTC",
             "BABA","PLTR","COIN","SHOP","SQ","UBER","DIS","PYPL","CRM","ORCL",
             "JPM","BAC","GS","WMT","COST","KO","PEP","MCD","NKE","XOM",
             "CVX","BA","GE","F","GM","RIVN","LCID","SNAP","PINS","ZM",
-            "ROKU","DOCU","AI","IONQ","SOFI","HOOD","DKNG","AFRM","UPST","PATH"
+            "ROKU","DOCU","AI","IONQ","SOFI","HOOD","DKNG","AFRM","UPST","PATH",
+
+            # 🔥 UTVIDET LISTE
+            "ADBE","CSCO","QCOM","TXN","AMAT","INTU","ISRG","MU","LRCX","KLAC",
+            "MRVL","SNOW","DDOG","NET","TEAM","CRWD","ZS","OKTA","MDB","PANW",
+            "NOW","WDAY","SHOP","SQ","PYPL","MA","V","AXP","BLK","SPGI",
+
+            "ABBV","PFE","MRK","LLY","JNJ","UNH","CVS","TMO","ABT","DHR",
+            "BMY","GILD","REGN","VRTX","BIIB",
+
+            "HD","LOW","TGT","WMT","COST","DG","DLTR","BBY","ETSY",
+
+            "XOM","CVX","COP","SLB","EOG","MPC","PSX","VLO",
+
+            "CAT","DE","HON","UPS","FDX","BA","LMT","RTX",
+
+            "TSM","ASML","SONY","SAP","ADSK","ORCL","IBM",
+
+            "SPOT","RBLX","EA","TTWO","U","MTCH",
+
+            "NIO","XPEV","LI","BYDDF",
+
+            "ARKK","QQQ","SPY","IWM"
         ]
-
-        # 🔥 bygg opp til ~800 tickers
-        self.tickers = self.base_tickers.copy()
-        alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
-        while len(self.tickers) < 800:
-            ticker = "".join(random.choices(alphabet, k=3))
-            if ticker not in self.tickers:
-                self.tickers.append(ticker)
 
     # ---------- DATA ----------
     def get_data(self, ticker):
         try:
-            df = yf.download(ticker, period="6mo", interval="1d")
+            df = yf.download(ticker, period="3mo", interval="1d", progress=False)
 
             if df is None or df.empty:
                 return None
@@ -41,7 +54,7 @@ class VectorMarketScanner:
             df["Close"] = pd.to_numeric(df["Close"], errors="coerce")
             df = df.dropna()
 
-            if len(df) < 50:
+            if len(df) < 30:
                 return None
 
             return df
@@ -57,10 +70,7 @@ class VectorMarketScanner:
         gain = delta.clip(lower=0)
         loss = -delta.clip(upper=0)
 
-        avg_gain = gain.rolling(14).mean()
-        avg_loss = loss.rolling(14).mean()
-
-        rs = avg_gain / avg_loss
+        rs = gain.rolling(14).mean() / loss.rolling(14).mean()
         df["RSI"] = 100 - (100 / (1 + rs))
 
         ema12 = df["Close"].ewm(span=12).mean()
@@ -69,9 +79,7 @@ class VectorMarketScanner:
         df["MACD"] = ema12 - ema26
         df["Signal"] = df["MACD"].ewm(span=9).mean()
 
-        df = df.fillna(method="bfill").fillna(method="ffill")
-
-        return df
+        return df.fillna(method="bfill")
 
     # ---------- ANALYZE ----------
     def analyze(self, ticker):
@@ -82,7 +90,6 @@ class VectorMarketScanner:
             return None
 
         df = self.calculate_indicators(df)
-
         last = df.iloc[-1]
 
         rsi = last["RSI"]
@@ -90,7 +97,7 @@ class VectorMarketScanner:
         signal = last["Signal"]
         price = last["Close"]
 
-        # 🔥 SIGNAL LOGIC
+        # SIGNAL
         if rsi < 35 and macd > signal:
             trade_signal = "BUY"
         elif rsi > 65 and macd < signal:
@@ -98,17 +105,11 @@ class VectorMarketScanner:
         else:
             trade_signal = "HOLD"
 
-        # 🔥 CONFIDENCE
-        confidence = round(
-            min(95, max(60, abs(macd - signal) * 100)),
-            2
-        )
+        confidence = round(min(95, max(60, abs(macd - signal) * 100)), 2)
 
-        # 🔥 EXPECTED MOVE
         volatility = df["Close"].pct_change().std() * 100
-        expected_move = round(volatility * random.uniform(1.5, 2.5), 2)
+        expected_move = round(volatility * 2, 2)
 
-        # 🔥 RISK
         if rsi < 30 or rsi > 70:
             risk = "High"
         elif 40 < rsi < 60:
@@ -136,9 +137,10 @@ class VectorMarketScanner:
 
         results = []
 
-        random.shuffle(self.tickers)
+        # 🔥 SCAN KUN ET UTVALG (rask + stabil)
+        sample = random.sample(self.tickers, min(len(self.tickers), 100))
 
-        for ticker in self.tickers:
+        for ticker in sample:
 
             if len(results) >= limit:
                 break
@@ -148,20 +150,13 @@ class VectorMarketScanner:
             if result:
                 results.append(result)
 
-        # 🔥 FALLBACK hvis random tickers feiler
-        if len(results) == 0:
-            for ticker in self.base_tickers:
+        # 🔥 FALLBACK (GARANTERT RESULTATER)
+        if len(results) < limit:
+            for ticker in self.tickers:
                 result = self.analyze(ticker)
                 if result:
                     results.append(result)
                     if len(results) >= limit:
                         break
 
-        # 🔥 SORT BEST FIRST
-        results = sorted(
-            results,
-            key=lambda x: x["confidence"],
-            reverse=True
-        )
-
-        return results
+        return sorted(results, key=lambda x: x["confidence"], reverse=True)
