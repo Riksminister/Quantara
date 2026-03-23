@@ -6,12 +6,34 @@ import numpy as np
 import yfinance as yf
 from datetime import datetime, timedelta
 from core.scanner import VectorMarketScanner
+import re
 
 st.set_page_config(layout="wide", page_title="Analyrix")
 
-# ---------- USER LOGIN ----------
-st.sidebar.title("Account")
-email = st.sidebar.text_input("Enter your email")
+# ---------- LOGIN ----------
+if "user_email" not in st.session_state:
+    st.session_state.user_email = None
+
+if not st.session_state.user_email:
+
+    st.markdown("## 🔐 Login")
+
+    email_input = st.text_input("Enter your email")
+
+    if st.button("Continue"):
+        if email_input:
+            st.session_state.user_email = email_input.lower()
+            st.rerun()
+        else:
+            st.warning("Enter email")
+
+    st.stop()
+
+email = st.session_state.user_email
+
+# ---------- NAME ----------
+name = re.sub(r'\d+', '', email.split("@")[0].split(".")[0]).capitalize()
+st.success(f"Welcome to Analyrix, {name}")
 
 # ---------- PRO USERS ----------
 PRO_USERS = [
@@ -21,35 +43,26 @@ PRO_USERS = [
 def is_pro_user(email):
     return email.lower() in [e.lower() for e in PRO_USERS]
 
+is_pro = is_pro_user(email)
+
 # ---------- DATABASE ----------
 if "users_db" not in st.session_state:
     st.session_state.users_db = {}
 
-if email:
-    if email not in st.session_state.users_db:
-        st.session_state.users_db[email] = {
-            "scan_count": 0,
-            "search_count": 0,
-            "last_reset": datetime.now()
-        }
+if email not in st.session_state.users_db:
+    st.session_state.users_db[email] = {
+        "scan_count": 0,
+        "search_count": 0,
+        "last_reset": datetime.now()
+    }
 
-    user = st.session_state.users_db[email]
+user = st.session_state.users_db[email]
 
-    # reset hver 24h
-    if datetime.now() - user["last_reset"] > timedelta(hours=24):
-        user["scan_count"] = 0
-        user["search_count"] = 0
-        user["last_reset"] = datetime.now()
-
-    is_pro = is_pro_user(email)
-
-    st.sidebar.success(f"Logged in: {email}")
-    st.sidebar.write(f"Plan: {'PRO' if is_pro else 'FREE'}")
-    st.sidebar.write(f"Scans: {user['scan_count']} / {'∞' if is_pro else 3}")
-    st.sidebar.write(f"Searches: {user['search_count']} / {'∞' if is_pro else 3}")
-else:
-    user = None
-    is_pro = False
+# reset hver 24h
+if datetime.now() - user["last_reset"] > timedelta(hours=24):
+    user["scan_count"] = 0
+    user["search_count"] = 0
+    user["last_reset"] = datetime.now()
 
 # ---------- STATE ----------
 if "results" not in st.session_state:
@@ -66,13 +79,15 @@ st.markdown("""
 # 🚀 Analyrix
 
 ### Find high-probability trades in seconds using AI
+
+Scan hundreds of stocks or analyze any stock instantly.
 """)
 
 st.info("🔓 Start free – upgrade anytime")
 
 col1, col2, col3 = st.columns(3)
 col1.metric("📊 Stocks Scanned", "400+")
-col2.metric("⚡ Scan Time", "<2 sec")
+col2.metric("⚡ Scan Time", "Few seconds")  # 🔥 HER ER ENDRINGEN
 col3.metric("🎯 Accuracy", "AI-driven")
 
 st.divider()
@@ -163,7 +178,7 @@ def create_chart(ticker, signal):
 
     fig = go.Figure()
 
-    fig.add_trace(go.Scatter(x=df["Date"], y=df["Close"], mode="lines", name="Price"))
+    fig.add_trace(go.Scatter(x=df["Date"], y=df["Close"], mode="lines"))
 
     fig.add_trace(go.Scatter(
         x=[df["Date"].iloc[-1]],
@@ -191,12 +206,8 @@ if col1.button("🚀 Scan Market"):
 
     st.session_state.show_search = False
 
-    if not email:
-        st.error("Enter email first")
-
-    elif not is_pro and user["scan_count"] >= 3:
+    if not is_pro and user["scan_count"] >= 3:
         st.error("🚫 Scan limit reached")
-
     else:
         with st.spinner("Scanning..."):
             st.session_state.results = scanner.scan_market(limit=20)
@@ -213,12 +224,8 @@ if st.session_state.show_search:
 
     if ticker_input and ticker_input != st.session_state.last_search:
 
-        if not email:
-            st.error("Enter email first")
-
-        elif not is_pro and user["search_count"] >= 3:
+        if not is_pro and user["search_count"] >= 3:
             st.error("🚫 Search limit reached")
-
         else:
             with st.spinner(f"Analyzing {ticker_input.upper()}..."):
 
