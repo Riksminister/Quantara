@@ -5,77 +5,82 @@ class VectorMarketScanner:
 
     def __init__(self):
 
-        # 🔥 KVALITETS TICKERS (~300)
+        # 🔥 KVALITETS TICKERS
         self.base_tickers = [
-            # Tech
             "AAPL","MSFT","NVDA","AMD","TSLA","GOOGL","META","AMZN","NFLX",
             "INTC","PLTR","SNOW","CRM","ORCL","ADBE",
-
-            # Finance
             "JPM","BAC","GS","MS","V","MA","PYPL","AXP",
-
-            # Healthcare
             "JNJ","PFE","MRNA","ABBV","LLY","UNH",
-
-            # Consumer
             "WMT","COST","NKE","SBUX","MCD","KO","PEP",
-
-            # Energy
             "XOM","CVX","SLB","OXY",
-
-            # Growth / popular
             "COIN","RBLX","SOFI","UPST","RIOT","MARA",
-
-            # ETFs
             "SPY","QQQ","DIA","IWM",
-
-            # Crypto
             "BTC-USD","ETH-USD","SOL-USD"
         ]
 
-        # 🔁 FYLL OPP LISTA (300+)
+        # 🔁 FYLL OPP LISTA (~300)
         self.tickers = self.base_tickers.copy()
         for _ in range(250):
             self.tickers.append(random.choice(self.base_tickers))
 
-    # ---------- GET REAL PRICE ----------
+    # ---------- PRICE ENGINE (KRITISK) ----------
     def get_price(self, ticker):
 
         try:
             ticker_obj = yf.Ticker(ticker)
 
-            # 🔥 BESTE LIVE APPROX
-            price = ticker_obj.fast_info.get("lastPrice", None)
+            # 1. FAST INFO (best case)
+            try:
+                price = ticker_obj.fast_info.get("lastPrice", None)
+                if price and price > 0:
+                    return round(float(price), 2)
+            except:
+                pass
 
-            if price:
-                return round(float(price), 2)
+            # 2. CURRENT PRICE
+            try:
+                price = ticker_obj.info.get("currentPrice", None)
+                if price and price > 0:
+                    return round(float(price), 2)
+            except:
+                pass
 
-        except:
-            pass
+            # 3. INTRADAY (mest reliable fallback)
+            try:
+                df = ticker_obj.history(period="1d", interval="1m")
 
-        # fallback til historisk
-        try:
-            df = yf.download(ticker, period="5d", interval="1d")
+                if not df.empty:
+                    price = float(df["Close"].dropna().iloc[-1])
+                    if price > 0:
+                        return round(price, 2)
+            except:
+                pass
 
-            if df.empty:
-                return None
+            # 4. DAILY (kun siste fallback)
+            try:
+                df = ticker_obj.history(period="5d", interval="1d")
 
-            price = float(df["Close"].dropna().iloc[-1])
-            return round(price, 2)
+                if not df.empty:
+                    price = float(df["Close"].dropna().iloc[-1])
+                    if price > 0:
+                        return round(price, 2)
+            except:
+                pass
+
+            return None
 
         except:
             return None
 
-    # ---------- ANALYZE ----------
+    # ---------- ANALYSIS ----------
     def analyze_stock(self, ticker):
 
         price = self.get_price(ticker)
 
-        # ❌ IKKE FAKE DATA
+        # ❌ DROPP ALT SOM IKKE ER VALID
         if not price or price < 3:
             return None
 
-        # 🔥 “AI-ish” logikk (kan forbedres senere)
         confidence = round(random.uniform(60, 90), 1)
         expected_move = round(random.uniform(2, 10), 2)
 
@@ -101,20 +106,35 @@ class VectorMarketScanner:
 
         for ticker in sample:
             result = self.analyze_stock(ticker)
+
             if result:
                 results.append(result)
 
             if len(results) >= limit:
                 break
 
-        # 🔥 SORTER BESTE ØVERST
         results = sorted(results, key=lambda x: x["expected_move"], reverse=True)
 
         return results
 
-    # ---------- SINGLE ----------
+    # ---------- SINGLE STOCK ----------
     def analyze_single_stock(self, ticker):
-        return self.analyze_stock(ticker)
+
+        result = self.analyze_stock(ticker)
+
+        if not result:
+            return {
+                "ticker": ticker.upper(),
+                "signal": "NO DATA",
+                "confidence": 0,
+                "expected_move": 0,
+                "risk": "N/A",
+                "entry": "-",
+                "stop_loss": "-",
+                "take_profit": "-"
+            }
+
+        return result
 
     # ---------- TRENDING ----------
     def get_trending(self):
