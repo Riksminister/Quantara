@@ -10,13 +10,52 @@ import re
 
 st.set_page_config(layout="wide", page_title="Analyrix")
 
-# ---------- LOGIN ----------
+# ---------- LOGIN STATE ----------
 if "user_email" not in st.session_state:
     st.session_state.user_email = None
 
+# ---------- LANDING + LOGIN ----------
 if not st.session_state.user_email:
 
-    st.markdown("## 🔐 Login")
+    st.markdown("""
+# 🚀 Analyrix
+
+### Find high-probability trades in seconds using AI
+
+Scan hundreds of stocks or analyze any stock instantly.
+""")
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("📊 Stocks Scanned", "800+")
+    col2.metric("⚡ Scan Time", "Few seconds")
+    col3.metric("🎯 Accuracy", "AI-driven")
+
+    st.divider()
+
+    st.markdown("## 🔥 What you get")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("""
+- 🧠 AI trade signals  
+- 📈 Expected move prediction  
+- 🎯 Entry, stop loss, take profit  
+- ⏱️ Expected hold time  
+- 🔍 Search any stock instantly  
+""")
+
+    with col2:
+        st.markdown("""
+- 📊 Smart charts  
+- 📉 RSI + MACD indicators  
+- ⚡ Fast market scanning  
+- 🔒 Premium insights (Pro)  
+""")
+
+    st.divider()
+
+    st.markdown("## 🔐 Get started")
 
     email_input = st.text_input("Enter your email")
 
@@ -29,9 +68,8 @@ if not st.session_state.user_email:
 
     st.stop()
 
+# ---------- USER ----------
 email = st.session_state.user_email
-
-# ---------- NAME ----------
 name = re.sub(r'\d+', '', email.split("@")[0].split(".")[0]).capitalize()
 st.success(f"Welcome to Analyrix, {name}")
 
@@ -58,7 +96,6 @@ if email not in st.session_state.users_db:
 
 user = st.session_state.users_db[email]
 
-# reset hver 24h
 if datetime.now() - user["last_reset"] > timedelta(hours=24):
     user["scan_count"] = 0
     user["search_count"] = 0
@@ -79,15 +116,13 @@ st.markdown("""
 # 🚀 Analyrix
 
 ### Find high-probability trades in seconds using AI
-
-Scan hundreds of stocks or analyze any stock instantly.
 """)
 
 st.info("🔓 Start free – upgrade anytime")
 
 col1, col2, col3 = st.columns(3)
-col1.metric("📊 Stocks Scanned", "400+")
-col2.metric("⚡ Scan Time", "Few seconds")  # 🔥 HER ER ENDRINGEN
+col1.metric("📊 Stocks Scanned", "800+")
+col2.metric("⚡ Scan Time", "Few seconds")
 col3.metric("🎯 Accuracy", "AI-driven")
 
 st.divider()
@@ -144,7 +179,6 @@ def get_data(ticker):
             df.columns = df.columns.get_level_values(0)
 
         df = df.reset_index()
-
     except:
         dates = pd.date_range(end=pd.Timestamp.today(), periods=120)
         df = pd.DataFrame({
@@ -209,7 +243,7 @@ if col1.button("🚀 Scan Market"):
     if not is_pro and user["scan_count"] >= 3:
         st.error("🚫 Scan limit reached")
     else:
-        with st.spinner("Scanning..."):
+        with st.spinner("Scanning 800+ stocks using AI..."):
             st.session_state.results = scanner.scan_market(limit=20)
             user["scan_count"] += 1
 
@@ -255,35 +289,3 @@ if st.session_state.show_search:
                 ### ⏱️ Expected Hold  
                 {get_timeframe(result)}
                 """)
-
-# ---------- DISPLAY ----------
-if st.session_state.results:
-
-    for i, r in enumerate(st.session_state.results):
-
-        st.markdown(f"""
-        ### 📊 {r['ticker']}
-
-        **🧠 AI Signal:** {r['signal']}  
-        **📊 AI Confidence:** {r['confidence']}%  
-        **📈 Expected Move:** {r['expected_move']}%  
-        **⚠️ Risk Level:** {r['risk']}
-        """)
-
-        if st.button(f"📊 View Chart - {r['ticker']}", key=i):
-
-            fig = create_chart(r["ticker"], r["signal"])
-            st.plotly_chart(fig, use_container_width=True)
-
-            st.markdown(f"""
-            ### 📈 Trade Plan
-
-            **Entry Price:** ${r['entry']}  
-            **Stop Loss:** ${r['stop_loss']}  
-            **Take Profit:** ${r['take_profit']}  
-
-            ### ⏱️ Expected Hold  
-            {get_timeframe(r)}
-            """)
-
-        st.divider()
