@@ -22,6 +22,12 @@ if "scan_count" not in st.session_state:
 if "last_scan_reset" not in st.session_state:
     st.session_state.last_scan_reset = datetime.now()
 
+if "show_search" not in st.session_state:
+    st.session_state.show_search = False
+
+if "last_search" not in st.session_state:
+    st.session_state.last_search = None
+
 # ---------- RESET ----------
 if datetime.now() - st.session_state.last_scan_reset > timedelta(hours=24):
     st.session_state.scan_count = 0
@@ -117,7 +123,6 @@ def get_data(ticker):
 
 # ---------- INDICATORS ----------
 def add_indicators(df):
-
     delta = df["Close"].diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
@@ -135,44 +140,34 @@ def add_indicators(df):
     df["Signal"] = df["MACD"].ewm(span=9).mean()
 
     df = df.fillna(method="bfill").fillna(method="ffill")
-
     return df
 
 # ---------- CHART ----------
 def create_chart(ticker, signal):
-
-    df = get_data(ticker)
-    df = add_indicators(df)
+    df = add_indicators(get_data(ticker))
 
     fig = go.Figure()
 
     fig.add_trace(go.Scatter(
         x=df["Date"],
         y=df["Close"],
-        name="Price",
         mode="lines",
+        name="Price",
         line=dict(width=3, color="#00bfff")
     ))
 
-    last_x = df["Date"].iloc[-1]
-    last_y = df["Close"].iloc[-1]
-
-    color = "green" if signal == "BUY" else "red"
-
     fig.add_trace(go.Scatter(
-        x=[last_x],
-        y=[last_y],
+        x=[df["Date"].iloc[-1]],
+        y=[df["Close"].iloc[-1]],
         mode="markers+text",
         text=[signal],
-        textposition="top center",
-        marker=dict(size=14, color=color)
+        textposition="top center"
     ))
 
     fig.add_trace(go.Scatter(
         x=df["Date"],
         y=df["RSI"],
         name="RSI",
-        opacity=0.6,
         yaxis="y2"
     ))
 
@@ -180,7 +175,6 @@ def create_chart(ticker, signal):
         x=df["Date"],
         y=df["MACD"],
         name="MACD",
-        opacity=0.6,
         yaxis="y3"
     ))
 
@@ -188,7 +182,6 @@ def create_chart(ticker, signal):
         x=df["Date"],
         y=df["Signal"],
         name="Signal",
-        opacity=0.6,
         yaxis="y3"
     ))
 
@@ -202,65 +195,66 @@ def create_chart(ticker, signal):
 
     return fig
 
-# ---------- SEARCH (FIXED) ----------
-st.markdown("## 🔍 Search stock")
+# ---------- BUTTONS ----------
+col1, col2 = st.columns(2)
 
-col1, col2 = st.columns([4, 1])
-
-ticker_input = col1.text_input(
-    "Enter ticker (e.g. TSLA, AAPL)",
-    key="search_input"
-)
-
-search_run = col2.button("ENTER")
-
-if search_run:
-
-    if not ticker_input:
-        st.warning("Enter a ticker")
-
-    elif not st.session_state.pro and st.session_state.scan_count >= 3:
-        st.error("🚫 Free limit reached")
-
-    else:
-        with st.spinner(f"Analyzing {ticker_input.upper()}..."):
-
-            result = scanner.analyze_single_stock(ticker_input.upper())
-            st.session_state.scan_count += 1
-
-            st.markdown(f"""
-            ### 📊 {result['ticker']}
-
-            **🧠 AI Signal:** {result['signal']}  
-            **📊 AI Confidence:** {result['confidence']}%  
-            **📈 Expected Move:** {result['expected_move']}%  
-            **⚠️ Risk Level:** {result['risk']}
-            """)
-
-            fig = create_chart(result["ticker"], result["signal"])
-            st.plotly_chart(fig, use_container_width=True)
-
-            st.markdown(f"""
-            ### 📈 Trade Plan
-
-            **Entry Price:** ${result['entry']}  
-            **Stop Loss:** ${result['stop_loss']}  
-            **Take Profit:** ${result['take_profit']}  
-
-            ### ⏱️ Expected Hold  
-            {get_timeframe(result)}
-            """)
-
-# ---------- SCAN ----------
-if st.button("🚀 Scan Market Now"):
+if col1.button("🚀 Scan Market"):
+    st.session_state.show_search = False
 
     if not st.session_state.pro and st.session_state.scan_count >= 3:
         st.error("🚫 Free limit reached")
     else:
-        with st.spinner("Scanning hundreds of stocks..."):
+        with st.spinner("Scanning..."):
             time.sleep(1.5)
             st.session_state.results = scanner.scan_market(limit=20)
             st.session_state.scan_count += 1
+
+if col2.button("🔍 Search Stock"):
+    st.session_state.show_search = True
+    st.session_state.results = []
+
+# ---------- SEARCH INPUT ----------
+if st.session_state.show_search:
+
+    ticker_input = st.text_input(
+        "Enter ticker and press ENTER",
+        key="search_box"
+    )
+
+    # 🔥 ENTER trigger
+    if ticker_input and ticker_input != st.session_state.last_search:
+
+        if not st.session_state.pro and st.session_state.scan_count >= 3:
+            st.error("🚫 Free limit reached")
+        else:
+            with st.spinner(f"Analyzing {ticker_input.upper()}..."):
+
+                result = scanner.analyze_single_stock(ticker_input.upper())
+                st.session_state.last_search = ticker_input
+                st.session_state.scan_count += 1
+
+                st.markdown(f"""
+                ### 📊 {result['ticker']}
+
+                **🧠 AI Signal:** {result['signal']}  
+                **📊 AI Confidence:** {result['confidence']}%  
+                **📈 Expected Move:** {result['expected_move']}%  
+                **⚠️ Risk Level:** {result['risk']}
+                """)
+
+                fig = create_chart(result["ticker"], result["signal"])
+                st.plotly_chart(fig, use_container_width=True)
+
+                st.markdown(f"""
+                ### 📈 Trade Plan
+
+                **Entry Price:** ${result['entry']}  
+                **Stop Loss:** ${result['stop_loss']}  
+                **Take Profit:** ${result['take_profit']}  
+
+                ### ⏱️ Expected Hold  
+                {get_timeframe(result)}
+                """)
 
 # ---------- DISPLAY ----------
 if st.session_state.results:
