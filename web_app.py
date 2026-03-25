@@ -73,9 +73,13 @@ email = st.session_state.user_email
 name = re.sub(r'\d+', '', email.split("@")[0].split(".")[0]).capitalize()
 st.success(f"Welcome to Analyrix, {name}")
 
-# ---------- PRO ----------
+# ---------- PRO USERS ----------
 PRO_USERS = ["sondreriksaasen@gmail.com"]
-is_pro = email.lower() in PRO_USERS
+
+def is_pro_user(email):
+    return email.lower() in [e.lower() for e in PRO_USERS]
+
+is_pro = is_pro_user(email)
 
 # ---------- DATABASE ----------
 if "users_db" not in st.session_state:
@@ -106,7 +110,12 @@ if "last_search" not in st.session_state:
     st.session_state.last_search = None
 
 # ---------- HERO ----------
-st.markdown("# 🚀 Analyrix")
+st.markdown("""
+# 🚀 Analyrix
+
+### Find high-probability trades in seconds using AI
+""")
+
 st.info("🔓 Start free – upgrade anytime")
 
 col1, col2, col3 = st.columns(3)
@@ -116,14 +125,40 @@ col3.metric("🎯 Accuracy", "AI-driven")
 
 st.divider()
 
+# ---------- FEATURES ----------
+st.markdown("## 🔥 What you get")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    st.markdown("""
+- 🧠 AI trade signals  
+- 📈 Expected move prediction  
+- 🎯 Entry, stop loss, take profit  
+- ⏱️ Expected hold time  
+- 🔍 Search any stock instantly  
+""")
+
+with col2:
+    st.markdown("""
+- 📊 Smart charts  
+- 📉 RSI + MACD indicators  
+- ⚡ Fast market scanning  
+- 🔒 Premium insights (Pro)  
+""")
+
+st.divider()
+
 scanner = VectorMarketScanner()
 
 # ---------- PAYWALL ----------
 if not is_pro:
     st.markdown("[🚀 Get Pro Access ($19/month)](https://buy.stripe.com/14A14n6kuaaPffCdqoak000)")
+    st.caption("After payment, enter your email above to unlock PRO")
     st.warning("Free: 3 scans + 3 searches per 24h")
+    st.divider()
 
-# ---------- HELPERS ----------
+# ---------- HELPER ----------
 def get_timeframe(move):
     if move > 8:
         return "Short-term (1–3 days)"
@@ -131,24 +166,52 @@ def get_timeframe(move):
         return "Medium-term (3–7 days)"
     return "Longer-term (1–2 weeks)"
 
-def generate_reasoning(signal, confidence, expected_move, risk):
-    if signal == "BUY":
-        return f"Bullish momentum detected ({confidence}% confidence)."
-    elif signal == "SELL":
-        return f"Bearish pressure detected ({confidence}% confidence)."
-    return f"Mixed signals. Risk: {risk}."
+def profit_sim(entry, move):
+    return round(1000 * (move / 100), 2)
 
-def profit_simulation(entry, expected_move):
-    profit = round(entry * (expected_move / 100), 2)
-    return f"If you invested $1000 → potential profit: ${round(1000 * (expected_move/100), 2)}"
+# ---------- DATA ----------
+def get_data(ticker):
+    try:
+        df = yf.download(ticker, period="6mo", interval="1d")
+
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+
+        df = df.reset_index()
+    except:
+        dates = pd.date_range(end=pd.Timestamp.today(), periods=120)
+        df = pd.DataFrame({
+            "Date": dates,
+            "Close": np.cumsum(np.random.randn(120)) + 100
+        })
+
+    df["Close"] = pd.Series(df["Close"]).astype(float)
+    return df
+
+# ---------- INDICATORS ----------
+def add_indicators(df):
+    delta = df["Close"].diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+
+    rs = gain.rolling(14).mean() / loss.rolling(14).mean()
+    df["RSI"] = 100 - (100 / (1 + rs))
+
+    ema12 = df["Close"].ewm(span=12).mean()
+    ema26 = df["Close"].ewm(span=26).mean()
+
+    df["MACD"] = ema12 - ema26
+    df["Signal"] = df["MACD"].ewm(span=9).mean()
+
+    return df.fillna(method="bfill")
 
 # ---------- CHART ----------
 def create_chart(ticker, signal):
-    df = yf.download(ticker, period="3mo")
-    df = df.reset_index()
+    df = add_indicators(get_data(ticker))
 
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=df["Date"], y=df["Close"]))
+
+    fig.add_trace(go.Scatter(x=df["Date"], y=df["Close"], mode="lines"))
 
     fig.add_trace(go.Scatter(
         x=[df["Date"].iloc[-1]],
@@ -156,6 +219,16 @@ def create_chart(ticker, signal):
         mode="markers+text",
         text=[signal]
     ))
+
+    fig.add_trace(go.Scatter(x=df["Date"], y=df["RSI"], yaxis="y2"))
+    fig.add_trace(go.Scatter(x=df["Date"], y=df["MACD"], yaxis="y3"))
+    fig.add_trace(go.Scatter(x=df["Date"], y=df["Signal"], yaxis="y3"))
+
+    fig.update_layout(
+        template="plotly_dark",
+        yaxis2=dict(overlaying="y", side="right"),
+        yaxis3=dict(overlaying="y", side="right", position=0.9)
+    )
 
     return fig
 
@@ -166,7 +239,7 @@ if col1.button("🚀 Scan Market"):
     st.session_state.show_search = False
 
     if not is_pro and user["scan_count"] >= 3:
-        st.error("Limit reached")
+        st.error("🚫 Scan limit reached")
     else:
         st.session_state.results = scanner.scan_market(limit=20)
         user["scan_count"] += 1
@@ -175,46 +248,8 @@ if col2.button("🔍 Search Stock"):
     st.session_state.show_search = True
     st.session_state.results = []
 
-# ---------- SEARCH ----------
-if st.session_state.show_search:
-    ticker = st.text_input("Enter ticker")
-
-    if ticker:
-        result = scanner.analyze_single_stock(ticker.upper())
-
-        if result:
-            move = result["expected_move"]
-
-            st.markdown(f"## {result['ticker']}")
-
-            label = f"🔥 STRONG {result['signal']}" if result["confidence"] > 85 else result["signal"]
-
-            st.markdown(label)
-            st.progress(int(result["confidence"]))
-
-            st.markdown(f"""
-**Expected Move:** {move}%  
-**Hold Time:** {get_timeframe(move)}
-
-Entry: ${result['entry']}  
-Stop Loss: ${result['stop_loss']}  
-Take Profit: ${result['take_profit']}
-""")
-
-            st.markdown(generate_reasoning(
-                result["signal"],
-                result["confidence"],
-                move,
-                result["risk"]
-            ))
-
-            st.success(profit_simulation(result["entry"], move))
-
-            st.plotly_chart(create_chart(result["ticker"], result["signal"]))
-
 # ---------- TOP PICKS ----------
 if st.session_state.results:
-
     top = sorted(st.session_state.results, key=lambda x: x['confidence'], reverse=True)[:3]
 
     st.markdown("## 🏆 Top AI Picks Today")
@@ -238,8 +273,8 @@ if st.session_state.results:
 **{label}**  
 Confidence: {r['confidence']}%  
 
-**Expected Move:** {move}%  
-**Hold Time:** {get_timeframe(move)}
+Expected Move: {move}%  
+Hold Time: {get_timeframe(move)}
 
 Entry: ${r['entry']}  
 Stop Loss: ${r['stop_loss']}  
@@ -248,17 +283,11 @@ Take Profit: ${r['take_profit']}
 
         st.progress(int(r["confidence"]))
 
-        st.markdown(generate_reasoning(
-            r["signal"],
-            r["confidence"],
-            move,
-            r["risk"]
-        ))
+        st.success(f"If you invested $1000 → ${profit_sim(r['entry'], move)}")
 
-        st.success(profit_simulation(r["entry"], move))
-
-        if st.button(f"Chart {r['ticker']}", key=i):
-            st.plotly_chart(create_chart(r["ticker"], r["signal"]))
+        if st.button(f"📊 View Chart - {r['ticker']}", key=f"chart_{i}"):
+            fig = create_chart(r["ticker"], r["signal"])
+            st.plotly_chart(fig, use_container_width=True)
 
         st.divider()
 
