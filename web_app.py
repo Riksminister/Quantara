@@ -57,7 +57,7 @@ Scan hundreds of stocks or analyze any stock instantly.
 
     st.markdown("## 🔐 Get started")
 
-    email_input = st.text_input("Enter your email")
+    email_input = st.text_input("Enter your email here")
 
     if st.button("Continue"):
         if email_input:
@@ -116,7 +116,7 @@ st.markdown("""
 ### Find high-probability trades in seconds using AI
 """)
 
-st.info("🔓 Start free – upgrade anytime")
+st.info("🔓 Start free – upgrade at anytime")
 
 col1, col2, col3 = st.columns(3)
 col1.metric("📊 Stocks Scanned", "800+")
@@ -283,7 +283,9 @@ Take Profit: ${r['take_profit']}
 
         st.progress(int(r["confidence"]))
 
-        st.success(f"If you invested $1000 → ${profit_sim(r['entry'], move)}")
+        final_value = 1000 + profit_sim(r['entry'], move)
+
+st.success(f"If you invest $1000 in this stock it could turn into ${final_value:.2f}")
 
         if st.button(f"📊 View Chart - {r['ticker']}", key=f"chart_{i}"):
             fig = create_chart(r["ticker"], r["signal"])
