@@ -166,8 +166,9 @@ def get_timeframe(move):
         return "Medium-term (3–7 days)"
     return "Longer-term (1–2 weeks)"
 
-def profit_sim(entry, move):
-    return round(1000 * (move / 100), 2)
+# ✅ FIXED (calculator ready)
+def profit_sim(investment, move):
+    return round(investment * (move / 100), 2)
 
 # ---------- DATA ----------
 def get_data(ticker):
@@ -262,6 +263,9 @@ if st.session_state.results:
 # ---------- DISPLAY ----------
 if st.session_state.results:
 
+    # ✅ CALCULATOR INPUT
+    investment = st.number_input("💰 Enter your investment ($)", value=1000, step=100)
+
     for i, r in enumerate(st.session_state.results):
 
         move = r["expected_move"]
@@ -283,9 +287,9 @@ Take Profit: ${r['take_profit']}
 
         st.progress(int(r["confidence"]))
 
-        profit = profit_sim(r['entry'], move)
+        profit = profit_sim(investment, move)
 
-        st.markdown("💰 **Investment: $1000**")
+        st.markdown(f"💰 **Investment: ${investment}**")
         st.markdown(f"💰 **Potential profit: ${profit:.2f}**")
 
         if st.button(f"📊 View Chart - {r['ticker']}", key=f"chart_{i}"):
