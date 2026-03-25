@@ -284,7 +284,9 @@ Take Profit: ${r['take_profit']}
         st.progress(int(r["confidence"]))
 
         profit = profit_sim(r['entry'], move)
-        st.markdown(f"💰 Potential profit: ${profit:.2f} on a $1000 investment")
+
+        st.markdown("💰 **Investment: $1000**")
+        st.markdown(f"💰 **Potential profit: ${profit:.2f}**")
 
         if st.button(f"📊 View Chart - {r['ticker']}", key=f"chart_{i}"):
             fig = create_chart(r["ticker"], r["signal"])
