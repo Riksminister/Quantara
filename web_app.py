@@ -170,7 +170,7 @@ if not is_pro:
     remaining_scans = max(0, 3 - user["scan_count"])
     remaining_searches = max(0, 3 - user["search_count"])
 
-    st.markdown("[🚀 Get Pro Access ($19/month)](https://buy.stripe.com/14A14n6kuaaPffCdqoak000)")
+    st.markdown("[🚀 Get Pro Access ($19/month)](https://buy.stripe.com/test_14A14n6kuaaPffCdqoak000)")
     st.caption("Unlock unlimited scans instantly")
 
     st.warning(f"""
