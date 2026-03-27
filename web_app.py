@@ -7,6 +7,7 @@ import yfinance as yf
 from datetime import datetime, timedelta
 from core.scanner import VectorMarketScanner
 import re
+import requests  # ✅ ADDED
 
 st.set_page_config(layout="wide", page_title="Analyrix")
 
@@ -79,7 +80,19 @@ PRO_USERS = ["sondreriksaasen@gmail.com"]
 def is_pro_user(email):
     return email.lower() in [e.lower() for e in PRO_USERS]
 
-is_pro = is_pro_user(email)
+# ✅ NEW BACKEND CHECK
+def check_pro_backend(email):
+    try:
+        res = requests.get(
+            "https://unsere-lynn-unlapped.ngrok-free.dev/check_pro",
+            params={"email": email}
+        )
+        return res.json().get("pro", False)
+    except:
+        return False
+
+# ✅ UPDATED
+is_pro = is_pro_user(email) or check_pro_backend(email)
 
 # ---------- DATABASE ----------
 if "users_db" not in st.session_state:
