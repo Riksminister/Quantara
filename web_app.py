@@ -116,7 +116,7 @@ st.markdown("""
 ### Find high-probability trades in seconds using AI
 """)
 
-st.info("🔓 Start free – upgrade anytime")
+st.success("🔓 Try 3 scans + 3 searches FREE daily")
 
 col1, col2, col3 = st.columns(3)
 col1.metric("📊 Stocks Scanned", "800+")
@@ -153,9 +153,18 @@ scanner = VectorMarketScanner()
 
 # ---------- PAYWALL ----------
 if not is_pro:
+
+    remaining_scans = max(0, 3 - user["scan_count"])
+    remaining_searches = max(0, 3 - user["search_count"])
+
     st.markdown("[🚀 Get Pro Access ($19/month)](https://buy.stripe.com/14A14n6kuaaPffCdqoak000)")
-    st.caption("After payment, enter your email above to unlock PRO")
-    st.warning("Free: 3 scans + 3 searches per 24h")
+    st.caption("Unlock unlimited scans instantly")
+
+    st.warning(f"""
+🔍 Searches left today: {remaining_searches}  
+🚀 Scans left today: {remaining_scans}
+""")
+
     st.divider()
 
 # ---------- HELPER ----------
@@ -169,7 +178,7 @@ def get_timeframe(move):
 def profit_sim(investment, move):
     return round(investment * (move / 100), 2)
 
-# 🔥 SMARTER AI REASONING
+# ---------- AI ----------
 def generate_reasoning(signal, confidence, expected_move, risk):
     strength = "strong" if confidence > 80 else "moderate" if confidence > 60 else "weak"
 
@@ -177,32 +186,28 @@ def generate_reasoning(signal, confidence, expected_move, risk):
         return f"""
 📈 **Bullish setup detected**
 
-• Trend strength: {strength}  
+• Strength: {strength}  
 • Expected move: +{expected_move}%  
 • Confidence: {confidence}%  
 
-RSI suggests momentum building while MACD indicates upward trend continuation.  
-Market structure supports a potential breakout.
+Momentum + trend alignment → possible breakout
 """
     elif signal == "SELL":
         return f"""
 📉 **Bearish setup detected**
 
-• Trend strength: {strength}  
+• Strength: {strength}  
 • Expected move: {expected_move}%  
 • Confidence: {confidence}%  
 
-RSI shows weakness and MACD is turning negative.  
-Downside pressure likely to continue short-term.
+Weak structure + selling pressure → downside likely
 """
     else:
         return f"""
-⚖️ **Neutral / consolidation phase**
+⚖️ Market indecision
 
-• Confidence: {confidence}%  
-• Risk level: {risk}  
-
-Indicators are mixed. No strong directional edge right now.
+Confidence: {confidence}%  
+Risk: {risk}
 """
 
 # ---------- DATA ----------
@@ -272,10 +277,15 @@ def create_chart(ticker, signal):
 col1, col2 = st.columns(2)
 
 if col1.button("🚀 Scan Market"):
+
     st.session_state.show_search = False
 
     if not is_pro and user["scan_count"] >= 3:
-        st.error("🚫 Scan limit reached")
+        st.error("🚫 Daily limit reached")
+
+        st.markdown("### 🔓 Upgrade to continue")
+        st.link_button("🚀 Get Pro", "https://buy.stripe.com/14A14n6kuaaPffCdqoak000")
+
     else:
         st.session_state.results = scanner.scan_market(limit=20)
         user["scan_count"] += 1
@@ -290,8 +300,9 @@ if st.session_state.results:
 
     st.markdown("## 🏆 Top AI Picks Today")
 
-    for t in top:
-        st.markdown(f"🔥 **{t['ticker']}** — {t['signal']} ({t['confidence']}%)")
+    for i, t in enumerate(top):
+        badge = "🥇 BEST PICK" if i == 0 else "🔥 HOT"
+        st.markdown(f"{badge} **{t['ticker']}** — {t['signal']} ({t['confidence']}%)")
 
     st.divider()
 
@@ -303,7 +314,11 @@ if st.session_state.results:
     for i, r in enumerate(st.session_state.results):
 
         move = r["expected_move"]
+
         label = f"🔥 STRONG {r['signal']}" if r["confidence"] > 85 else r["signal"]
+
+        if r["confidence"] > 90:
+            st.markdown("🚨 **HIGH PROBABILITY SETUP**")
 
         st.markdown(f"""
 ### 📊 {r['ticker']}
@@ -319,7 +334,6 @@ Stop Loss: ${r['stop_loss']}
 Take Profit: ${r['take_profit']}
 """)
 
-        # 🔥 SAFE AI INSIGHT
         st.markdown("### 🧠 AI Insight")
         st.info(generate_reasoning(
             r.get('signal', 'HOLD'),
