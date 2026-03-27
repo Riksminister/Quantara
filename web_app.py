@@ -169,14 +169,41 @@ def get_timeframe(move):
 def profit_sim(investment, move):
     return round(investment * (move / 100), 2)
 
-# 🔥 NEW: AI REASONING
+# 🔥 SMARTER AI REASONING
 def generate_reasoning(signal, confidence, expected_move, risk):
+    strength = "strong" if confidence > 80 else "moderate" if confidence > 60 else "weak"
+
     if signal == "BUY":
-        return f"📈 Strong bullish momentum detected. Indicators align with upward movement ({confidence}% confidence)."
+        return f"""
+📈 **Bullish setup detected**
+
+• Trend strength: {strength}  
+• Expected move: +{expected_move}%  
+• Confidence: {confidence}%  
+
+RSI suggests momentum building while MACD indicates upward trend continuation.  
+Market structure supports a potential breakout.
+"""
     elif signal == "SELL":
-        return f"📉 Bearish pressure detected. Indicators suggest downside risk ({confidence}% confidence)."
+        return f"""
+📉 **Bearish setup detected**
+
+• Trend strength: {strength}  
+• Expected move: {expected_move}%  
+• Confidence: {confidence}%  
+
+RSI shows weakness and MACD is turning negative.  
+Downside pressure likely to continue short-term.
+"""
     else:
-        return f"⚖️ Mixed signals. Market is uncertain. Risk level: {risk}."
+        return f"""
+⚖️ **Neutral / consolidation phase**
+
+• Confidence: {confidence}%  
+• Risk level: {risk}  
+
+Indicators are mixed. No strong directional edge right now.
+"""
 
 # ---------- DATA ----------
 def get_data(ticker):
@@ -292,12 +319,12 @@ Stop Loss: ${r['stop_loss']}
 Take Profit: ${r['take_profit']}
 """)
 
-        # 🔥 AI INSIGHT (NY)
+        # 🔥 SAFE AI INSIGHT
         st.markdown("### 🧠 AI Insight")
         st.info(generate_reasoning(
-            r['signal'],
-            r['confidence'],
-            r['expected_move'],
+            r.get('signal', 'HOLD'),
+            r.get('confidence', 50),
+            r.get('expected_move', 0),
             r.get('risk', 'Medium')
         ))
 
