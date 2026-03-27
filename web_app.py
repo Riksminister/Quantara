@@ -166,9 +166,17 @@ def get_timeframe(move):
         return "Medium-term (3–7 days)"
     return "Longer-term (1–2 weeks)"
 
-# ✅ FIXED (calculator ready)
 def profit_sim(investment, move):
     return round(investment * (move / 100), 2)
+
+# 🔥 NEW: AI REASONING
+def generate_reasoning(signal, confidence, expected_move, risk):
+    if signal == "BUY":
+        return f"📈 Strong bullish momentum detected. Indicators align with upward movement ({confidence}% confidence)."
+    elif signal == "SELL":
+        return f"📉 Bearish pressure detected. Indicators suggest downside risk ({confidence}% confidence)."
+    else:
+        return f"⚖️ Mixed signals. Market is uncertain. Risk level: {risk}."
 
 # ---------- DATA ----------
 def get_data(ticker):
@@ -263,7 +271,6 @@ if st.session_state.results:
 # ---------- DISPLAY ----------
 if st.session_state.results:
 
-    # ✅ CALCULATOR INPUT
     investment = st.number_input("💰 Enter your investment ($)", value=1000, step=100)
 
     for i, r in enumerate(st.session_state.results):
@@ -284,6 +291,15 @@ Entry: ${r['entry']}
 Stop Loss: ${r['stop_loss']}  
 Take Profit: ${r['take_profit']}
 """)
+
+        # 🔥 AI INSIGHT (NY)
+        st.markdown("### 🧠 AI Insight")
+        st.info(generate_reasoning(
+            r['signal'],
+            r['confidence'],
+            r['expected_move'],
+            r.get('risk', 'Medium')
+        ))
 
         st.progress(int(r["confidence"]))
 
