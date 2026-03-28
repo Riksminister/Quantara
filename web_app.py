@@ -80,18 +80,19 @@ PRO_USERS = ["sondreriksaasen@gmail.com"]
 def is_pro_user(email):
     return email.lower() in [e.lower() for e in PRO_USERS]
 
-# ✅ NEW BACKEND CHECK
+# ✅ BACKEND CHECK (STABIL VERSION)
 def check_pro_backend(email):
     try:
         res = requests.get(
             "https://unsere-lynn-unlapped.ngrok-free.dev/check_pro",
-            params={"email": email}
+            params={"email": email},
+            timeout=5  # 🔥 prevents freezing if backend is down
         )
         return res.json().get("pro", False)
     except:
         return False
 
-# ✅ UPDATED
+# ✅ FINAL LOGIC
 is_pro = is_pro_user(email) or check_pro_backend(email)
 
 # ---------- DATABASE ----------
